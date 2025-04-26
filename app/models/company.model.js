@@ -18,6 +18,8 @@ module.exports = (sequelize, Sequelize) => {
             allowNull: false,
             unique: true,
         },
+	}, {
+		freezeTableName: true,
 	});
 
 	return Company;
