@@ -53,3 +53,10 @@ Object.keys(db).forEach((modelName) => {
 });
 
 module.exports = db;
+
+Ticket.associate = (models) => {
+    Ticket.belongsTo(models.user, {as: `customer`});
+    Ticket.belongsTo(models.user, {as: `agent`});
+    Ticket.hasMany(models.menssage);
+    Ticket.belongsTo(models.department);
+};
