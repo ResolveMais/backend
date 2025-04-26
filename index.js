@@ -1,7 +1,7 @@
 require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
-const router = require("./app/routes");
+const { routesController } = require("./app/routes");
 
 const app = express();
 
@@ -15,7 +15,7 @@ app.use(express.static("public"));
 const db = require('./app/models');
 db.sequelize.sync();
 
-app.use(router);
+routesController(app);
 
 app.get("/", (req, res) => {
     res.send("Hello World!");
