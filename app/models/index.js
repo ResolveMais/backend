@@ -1,4 +1,6 @@
 const dbConfig = require('../config/db.config.js');
+const fs = require('fs');
+const path = require('path');
 const { Sequelize } = require('sequelize');
 
 const sequelize = new Sequelize(dbConfig.DB, dbConfig.USER, dbConfig.PASSWORD, {
@@ -30,6 +32,24 @@ const db = {};
 db.Sequelize = Sequelize;
 db.sequelize = sequelize;
 
-db.Company = require('./company.model.js')(sequelize, Sequelize);
+fs.readdirSync(__dirname)
+    .filter((file) => {
+        return (
+            file.indexOf('.') !== 0 &&
+            file !== 'index.js' &&
+            file.slice(-3) === '.js' &&
+            file.indexOf('.test.js') === -1
+        );
+    })
+    .forEach((file) => {
+        const model = require(path.join(__dirname, file))(sequelize, Sequelize.DataTypes);
+        db[model.name] = model;
+    });
+
+Object.keys(db).forEach((modelName) => {
+    if (db[modelName].associate) {
+        db[modelName].associate(db);
+    }
+});
 
 module.exports = db;
