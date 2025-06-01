@@ -1,4 +1,4 @@
-const { company: CompanyModel } = require('../models');
+const { Company: CompanyModel } = require('../models');
 
 module.exports = {
     getAll: async () => {
