@@ -19,7 +19,8 @@ module.exports = (sequelize, Sequelize) => {
             unique: true,
         },
 	}, {
-		freezeTableName: true,
+		tableName: "Company",
+		timestamps: false,
 	});
 
 	return Company;

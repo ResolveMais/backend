@@ -20,14 +20,18 @@
   "homepage": "https://github.com/ResolveMais/backend#readme",
   "description": "",
   "dependencies": {
+    "@sequelize/mssql": "^7.0.0-alpha.46",
+    "bcrypt": "^6.0.0",
     "cors": "^2.8.5",
     "dotenv": "^16.5.0",
     "express": "^5.1.0",
     "fs": "^0.0.1-security",
+    "jsonwebtoken": "^9.0.2",
     "mysql2": "^3.14.0",
     "path": "^0.12.7",
     "sequelize": "^6.37.7",
-    "sequelize-hierarchy": "^2.0.4"
+    "sequelize-hierarchy": "^2.0.4",
+    "tedious": "^18.6.1"
   },
   "devDependencies": {
     "nodemon": "^3.1.10"
