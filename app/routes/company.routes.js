@@ -5,4 +5,4 @@ const CompanyController = require('../controllers/company.controller.js');
 
 router.get("/all", CompanyController.getAll);
 
-module.exports = { alias: "/companies", router };
+module.exports = { alias: "/api/companies", router };
