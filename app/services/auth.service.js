@@ -16,14 +16,26 @@ exports.login = async ({ email, password }) => {
         // generate token
         const token = jwt.sign(user);
 
-        return { status: 200, message: "Login successful", user: { id: user.id }, token };
+        return {
+            status: 200,
+            message: "Login successful",
+            user: {
+                id: user.id,
+                name: user.name,
+                email: user.email,
+                cpf: user.cpf,
+                phone: user.phone,
+                birthDate: user.birthDate,
+            },
+            token
+        };
     } catch (error) {
         console.error('Error during login: ' + error.message);
-        throw new Error('Login failed');
+        return { status: 500, message: "Login failed" };
     }
 };
 
-exports.register = async ({ name, email, password, cpf, phone = "", birthDate = "" }) => {
+exports.register = async ({ name, email, password, cpf, phone = null, birthDate = null }) => {
     try {
         if (!name || !email || !password || !cpf) {
             return { status: 400, message: 'Name, email, and password are required' };
@@ -39,7 +51,7 @@ exports.register = async ({ name, email, password, cpf, phone = "", birthDate = 
         const hashedPassword = await bcrypt.hash(password, 10);
 
         // Create new user
-        const newUser = await userRepository.create({ name, email, password: hashedPassword });
+        const newUser = await userRepository.create({ name, email, password: hashedPassword, cpf, phone, birthDate });
 
         if (!newUser || !newUser.id) {
             return { status: 500, message: 'User registration failed' };
