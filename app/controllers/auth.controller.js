@@ -15,3 +15,11 @@ exports.register = async (req, res) => {
 
   return res.status(response.status).json({ ...response });
 };
+
+exports.validateToken = async (req, res) => {
+  const { user } = req;
+
+  if (!user || !user?.id) return res.status(401).json({ error: 'User not found' });
+
+  return res.status(200).json({ status: 200, message: "Valid token", user });
+}

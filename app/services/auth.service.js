@@ -4,9 +4,10 @@ const jwt = require("../utils/jwt");
 
 exports.login = async ({ email, password }) => {
     try {
-        const user = await userRepository.getByEmail(email);
+        let user = await userRepository.getByEmail(email, true);
 
         if (!user) return { status: 400, message: "Invalid credentials" };
+        else user = user.get({ plain: true });
 
         // check password with bcrypt
         const isPasswordValid = await bcrypt.compare(password, user.password);
@@ -19,15 +20,8 @@ exports.login = async ({ email, password }) => {
         return {
             status: 200,
             message: "Login successful",
-            user: {
-                id: user.id,
-                name: user.name,
-                email: user.email,
-                cpf: user.cpf,
-                phone: user.phone,
-                birthDate: user.birthDate,
-            },
-            token
+            user,
+            token,
         };
     } catch (error) {
         console.error('Error during login: ' + error.message);
@@ -60,7 +54,7 @@ exports.register = async ({ name, email, password, cpf, phone = null, birthDate 
         // Generate token for the new user
         const token = jwt.sign(newUser);
 
-        return { status: 201, message: 'User registered successfully', user: { id: newUser.id }, token };
+        return { status: 201, message: 'User registered successfully', user: { ...newUser?.get({ plain: true }) }, token };
     } catch (error) {
         console.error('Error during registration: ' + error.message);
         return { status: 500, message: 'Registration failed' };
