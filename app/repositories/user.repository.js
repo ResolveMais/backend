@@ -1,4 +1,3 @@
-const { getById } = require('../../../../../../WORK/Code/repositories/orion-backend/api/repositories/aiModels.repository');
 const { User: UserModel } = require('../models');
 
 module.exports = {
