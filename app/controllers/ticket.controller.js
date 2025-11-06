@@ -103,3 +103,18 @@ exports.getUserTickets = async (req, res) => {
         return res.status(500).json({ status: 500, message: 'Erro interno do servidor' });
     }
 };
+
+exports.getUserPendingTickets = async (req, res) => {
+    try {
+        const userId = req.user.id;
+        console.log(`🎫 Buscando tickets PENDENTES do usuário ${userId}...`);
+        
+        const response = await ticketService.getUserPendingTickets(userId);
+        console.log(`✅ ${response.tickets?.length || 0} tickets PENDENTES encontrados`);
+        
+        return res.status(response.status).json(response);
+    } catch (error) {
+        console.error('❌ Erro ao buscar tickets pendentes:', error);
+        return res.status(500).json({ status: 500, message: 'Erro interno do servidor' });
+    }
+};

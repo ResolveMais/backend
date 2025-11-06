@@ -19,4 +19,7 @@ router.get("/my-tickets", TicketController.getUserTickets);
 // Criar novo ticket
 router.post("/create", TicketController.create);
 
+// No ticket.routes.js
+router.get("/user-pending-tickets", authMiddleware, TicketController.getUserPendingTickets);
+
 module.exports = { alias: "/api/tickets", router };
