@@ -99,3 +99,34 @@ exports.getUserPendingTickets = async (userId) => {
     return { status: 500, message: 'Erro ao buscar tickets pendentes.' };
   }
 };
+
+// ✅ NOVO SERVICE: Buscar últimas atualizações
+exports.getRecentUpdates = async (userId) => {
+  try {
+    if (!userId) return { status: 400, message: 'ID do usuário é obrigatório' };
+
+    const updates = await ticketRepository.getRecentUpdates(userId, 5);
+
+    // Formatar resposta para o frontend
+    const formattedUpdates = updates.map(update => ({
+      id: update.id,
+      message: update.message,
+      type: update.type,
+      createdAt: update.createdAt,
+      ticket: {
+        id: update.ticket?.id,
+        description: update.ticket?.description,
+        status: update.ticket?.status,
+        company: update.ticket?.empresa?.name
+      },
+      employee: update.employee ? {
+        role: update.employee?.role?.roleName
+      } : null
+    }));
+
+    return { status: 200, updates: formattedUpdates };
+  } catch (error) {
+    console.error('❌ SERVICE: Erro ao buscar atualizações:', error);
+    return { status: 500, message: 'Erro ao buscar atualizações.' };
+  }
+};

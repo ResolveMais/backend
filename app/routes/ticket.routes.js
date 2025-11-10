@@ -19,7 +19,10 @@ router.get("/my-tickets", TicketController.getUserTickets);
 // Criar novo ticket
 router.post("/create", TicketController.create);
 
-// No ticket.routes.js
-router.get("/user-pending-tickets", authMiddleware, TicketController.getUserPendingTickets);
+// Buscar tickets pendentes do usuário
+router.get("/user-pending-tickets", TicketController.getUserPendingTickets);
+
+// ✅ NOVA ROTA: Buscar últimas atualizações
+router.get("/recent-updates", TicketController.getRecentUpdates);
 
 module.exports = { alias: "/api/tickets", router };

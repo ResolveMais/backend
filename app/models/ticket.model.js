@@ -18,6 +18,16 @@ module.exports = (sequelize, Sequelize) => {
       type: Sequelize.DATE,
       defaultValue: Sequelize.NOW,
     },
+    // ✅ NOVO CAMPO: Para rastrear última atualização
+    updatedAt: {
+      type: Sequelize.DATE,
+      defaultValue: Sequelize.NOW,
+    },
+    // ✅ NOVO CAMPO: Para mensagens de atualização
+    lastUpdateMessage: {
+      type: Sequelize.STRING,
+      allowNull: true,
+    }
   }, {
     tableName: 'Ticket',
     timestamps: false,
@@ -40,6 +50,12 @@ module.exports = (sequelize, Sequelize) => {
     Ticket.belongsTo(models.ComplaintTitle, {
       foreignKey: 'complaintTitle_id',
       as: 'tituloReclamacao',
+    });
+
+    // ✅ NOVA ASSOCIAÇÃO: Um ticket pode ter várias atualizações
+    Ticket.hasMany(models.TicketUpdate, {
+      foreignKey: 'ticket_id',
+      as: 'updates',
     });
   };
 

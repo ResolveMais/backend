@@ -118,3 +118,19 @@ exports.getUserPendingTickets = async (req, res) => {
         return res.status(500).json({ status: 500, message: 'Erro interno do servidor' });
     }
 };
+
+// ✅ NOVO CONTROLLER: Buscar últimas atualizações
+exports.getRecentUpdates = async (req, res) => {
+    try {
+        const userId = req.user.id;
+        console.log(`🔄 Buscando últimas atualizações do usuário ${userId}...`);
+        
+        const response = await ticketService.getRecentUpdates(userId);
+        console.log(`✅ ${response.updates?.length || 0} atualizações encontradas`);
+        
+        return res.status(response.status).json(response);
+    } catch (error) {
+        console.error('❌ Erro ao buscar atualizações:', error);
+        return res.status(500).json({ status: 500, message: 'Erro interno do servidor' });
+    }
+};

@@ -1,4 +1,4 @@
-const { Ticket: TicketModel, Company, ComplaintTitle, User } = require('../models');
+const { Ticket: TicketModel, Company, ComplaintTitle, User, TicketUpdate, Employee, Role } = require('../models');
 
 module.exports = {
   create: async ({ description, userId, companyId, complaintTitleId }) => {
@@ -22,6 +22,13 @@ module.exports = {
         company_id: companyId,
         complaintTitle_id: complaintTitleId,
         status: 'aberto'
+      });
+
+      // ✅ CRIAR ATUALIZAÇÃO AUTOMÁTICA PARA NOVO TICKET
+      await TicketUpdate.create({
+        message: 'Novo ticket criado',
+        type: 'creation',
+        ticket_id: newTicket.id
       });
 
       return newTicket;
@@ -53,7 +60,7 @@ module.exports = {
     try {
       const tickets = await TicketModel.findAll({
         where: { user_id: userId },
-        attributes: ['id', 'description', 'status', 'createdAt'], // 🔒 só o necessário
+        attributes: ['id', 'description', 'status', 'createdAt'],
         include: [
           { model: Company, as: 'empresa', attributes: ['name'] },
           { model: ComplaintTitle, as: 'tituloReclamacao', attributes: ['title'] }
@@ -81,6 +88,74 @@ module.exports = {
       return tickets;
     } catch (error) {
       console.error('❌ REPOSITORY: Erro ao buscar tickets pendentes:', error);
+      throw error;
+    }
+  },
+
+  // ✅ NOVO MÉTODO: Buscar últimas atualizações do usuário
+  getRecentUpdates: async (userId, limit = 5) => {
+    try {
+      const updates = await TicketUpdate.findAll({
+        include: [
+          {
+            model: TicketModel,
+            as: 'ticket',
+            where: { user_id: userId },
+            attributes: ['id', 'description', 'status'],
+            include: [
+              { 
+                model: Company, 
+                as: 'empresa', 
+                attributes: ['name'] 
+              }
+            ]
+          },
+          {
+            model: Employee,
+            as: 'employee',
+            attributes: ['id', 'email'],
+            include: [
+              {
+                model: Role,
+                as: 'role',
+                attributes: ['roleName']
+              }
+            ]
+          }
+        ],
+        order: [['createdAt', 'DESC']],
+        limit: limit
+      });
+
+      return updates;
+    } catch (error) {
+      console.error('❌ REPOSITORY: Erro ao buscar atualizações:', error);
+      throw error;
+    }
+  },
+
+  // ✅ NOVO MÉTODO: Criar atualização
+  createUpdate: async ({ ticketId, message, type, employeeId = null }) => {
+    try {
+      const update = await TicketUpdate.create({
+        message,
+        type,
+        ticket_id: ticketId,
+        employee_id: employeeId
+      });
+
+      // Atualiza também o updatedAt do ticket
+      await TicketModel.update(
+        { 
+          updatedAt: new Date(),
+          lastUpdateMessage: message 
+        },
+        { where: { id: ticketId } }
+      );
+
+      return update;
+    } catch (error) {
+      console.error('❌ REPOSITORY: Erro ao criar atualização:', error);
       throw error;
     }
   }
