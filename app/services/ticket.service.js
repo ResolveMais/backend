@@ -105,7 +105,7 @@ exports.getRecentUpdates = async (userId) => {
   try {
     if (!userId) return { status: 400, message: 'ID do usuário é obrigatório' };
 
-    const updates = await ticketRepository.getRecentUpdates(userId, 5);
+    const updates = await ticketRepository.getRecentUpdates(userId, 3);
 
     // Formatar resposta para o frontend
     const formattedUpdates = updates.map(update => ({
