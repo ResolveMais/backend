@@ -5,7 +5,6 @@ module.exports = {
     try {
       console.log('💾 REPOSITORY: Criando ticket no banco...');
 
-      // Verificar se as chaves estrangeiras existem
       const [userExists, companyExists, complaintTitleExists] = await Promise.all([
         User.findByPk(userId),
         Company.findByPk(companyId),
@@ -24,7 +23,6 @@ module.exports = {
         status: 'aberto'
       });
 
-      // ✅ CRIAR ATUALIZAÇÃO AUTOMÁTICA PARA NOVO TICKET
       await TicketUpdate.create({
         message: 'Novo ticket criado',
         type: 'creation',
@@ -92,8 +90,29 @@ module.exports = {
     }
   },
 
-  // ✅ NOVO MÉTODO: Buscar últimas atualizações do usuário
-  getRecentUpdates: async (userId, limit = 5) => {
+  // ✅ NOVO MÉTODO: Buscar tickets abertos E pendentes
+  getOpenAndPendingByUserId: async (userId) => {
+    try {
+      const tickets = await TicketModel.findAll({
+        where: { 
+          user_id: userId, 
+          status: ['aberto', 'pendente']
+        },
+        attributes: ['id', 'description', 'status', 'createdAt'],
+        include: [
+          { model: Company, as: 'empresa', attributes: ['name'] },
+          { model: ComplaintTitle, as: 'tituloReclamacao', attributes: ['title'] }
+        ],
+        order: [['createdAt', 'DESC']]
+      });
+      return tickets;
+    } catch (error) {
+      console.error('❌ REPOSITORY: Erro ao buscar tickets abertos/pendentes:', error);
+      throw error;
+    }
+  },
+
+  getRecentUpdates: async (userId, limit = 3) => {
     try {
       const updates = await TicketUpdate.findAll({
         include: [
@@ -134,7 +153,6 @@ module.exports = {
     }
   },
 
-  // ✅ NOVO MÉTODO: Criar atualização
   createUpdate: async ({ ticketId, message, type, employeeId = null }) => {
     try {
       const update = await TicketUpdate.create({
@@ -144,7 +162,6 @@ module.exports = {
         employee_id: employeeId
       });
 
-      // Atualiza também o updatedAt do ticket
       await TicketModel.update(
         { 
           updatedAt: new Date(),

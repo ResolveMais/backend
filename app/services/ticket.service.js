@@ -60,7 +60,6 @@ exports.getUserTickets = async (userId) => {
 
     const tickets = await ticketRepository.getByUserId(userId);
 
-    // 🔒 Sanitização — só envia campos necessários
     const sanitized = tickets.map((t) => ({
       id: t.id,
       empresa: t.empresa?.name || 'Empresa não informada',
@@ -83,7 +82,6 @@ exports.getUserPendingTickets = async (userId) => {
 
     const tickets = await ticketRepository.getPendingByUserId(userId);
 
-    // 🔒 Sanitização
     const sanitized = tickets.map((t) => ({
       id: t.id,
       empresa: t.empresa?.name || 'Empresa não informada',
@@ -100,14 +98,57 @@ exports.getUserPendingTickets = async (userId) => {
   }
 };
 
-// ✅ NOVO SERVICE: Buscar últimas atualizações
+// ✅ NOVO SERVICE: Buscar tickets abertos e pendentes
+exports.getUserOpenAndPendingTickets = async (userId) => {
+  try {
+    if (!userId) return { status: 400, message: 'ID do usuário é obrigatório' };
+
+    const tickets = await ticketRepository.getOpenAndPendingByUserId(userId);
+
+    const sanitized = tickets.map((t) => ({
+      id: t.id,
+      empresa: t.empresa?.name || 'Empresa não informada',
+      tituloReclamacao: t.tituloReclamacao?.title || 'Sem título',
+      descricao: t.description,
+      status: t.status,
+      criadoEm: t.createdAt
+    }));
+
+    return { status: 200, tickets: sanitized };
+  } catch (error) {
+    console.error('❌ SERVICE: Erro ao buscar tickets abertos/pendentes:', error);
+    return { status: 500, message: 'Erro ao buscar tickets.' };
+  }
+};
+
+exports.getUserPendingTickets = async (userId) => {
+  try {
+    if (!userId) return { status: 400, message: 'ID do usuário é obrigatório' };
+
+    const tickets = await ticketRepository.getPendingByUserId(userId);
+
+    const sanitized = tickets.map((t) => ({
+      id: t.id,
+      empresa: t.empresa?.name || 'Empresa não informada',
+      tituloReclamacao: t.tituloReclamacao?.title || 'Sem título',
+      descricao: t.description,
+      status: t.status,
+      criadoEm: t.createdAt
+    }));
+
+    return { status: 200, tickets: sanitized };
+  } catch (error) {
+    console.error('❌ SERVICE: Erro ao buscar tickets pendentes:', error);
+    return { status: 500, message: 'Erro ao buscar tickets pendentes.' };
+  }
+};
+
 exports.getRecentUpdates = async (userId) => {
   try {
     if (!userId) return { status: 400, message: 'ID do usuário é obrigatório' };
 
     const updates = await ticketRepository.getRecentUpdates(userId, 3);
 
-    // Formatar resposta para o frontend
     const formattedUpdates = updates.map(update => ({
       id: update.id,
       message: update.message,
