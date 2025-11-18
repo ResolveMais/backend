@@ -52,4 +52,14 @@ module.exports = {
             throw error; // Re-throw the error for further handling
         }
     },
+    update: async (id, payload) => {
+        try {
+            const [updatedRowsCount] = await UserModel.update(payload, { where: { id } });
+
+            return updatedRowsCount > 0;
+        } catch (error) {
+            console.error('Error updating user: ' + error.message);
+            throw error;
+        }
+    },
 };

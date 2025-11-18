@@ -3,7 +3,6 @@ const jwt = require('../utils/jwt');
 
 const authMiddleware = async (req, res, next) => {
     const authHeader = req.headers.authorization;
-    console.log({ headers: req.headers });
 
     if (!authHeader) return res.status(401).json({ error: 'No token provided' });
 
