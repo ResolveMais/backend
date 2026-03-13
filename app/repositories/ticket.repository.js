@@ -72,11 +72,11 @@ module.exports = {
     }
   },
 
-  getPendingByUserId: async (userId) => {
+  getClosedByUserId: async (userId) => {
     try {
       const tickets = await TicketModel.findAll({
-        where: { user_id: userId, status: 'aberto' },
-        attributes: ['id', 'description', 'status', 'createdAt'],
+        where: { user_id: userId, status: 'finalizado' },
+        attributes: ['id', 'description', 'status', 'createdAt', 'updatedAt'],
         include: [
           { model: Company, as: 'empresa', attributes: ['name'] },
           { model: ComplaintTitle, as: 'tituloReclamacao', attributes: ['title'] }
@@ -85,7 +85,7 @@ module.exports = {
       });
       return tickets;
     } catch (error) {
-      console.error('❌ REPOSITORY: Erro ao buscar tickets pendentes:', error);
+      console.error('❌ REPOSITORY: Erro ao buscar tickets resolvidos:', error);
       throw error;
     }
   },

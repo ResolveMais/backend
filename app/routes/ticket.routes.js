@@ -10,8 +10,7 @@ router.get("/companies", TicketController.getCompanies);
 router.get("/complaint-titles/:companyId", TicketController.getComplaintTitles);
 router.get("/my-tickets", TicketController.getUserTickets);
 router.post("/create", TicketController.create);
-router.get("/user-pending-tickets", TicketController.getUserPendingTickets);
-// ✅ NOVA ROTA: Buscar tickets abertos e pendentes
+router.get("/user-closed-tickets", TicketController.getUserClosedTickets);
 router.get("/user-open-pending-tickets", TicketController.getUserOpenAndPendingTickets);
 router.get("/recent-updates", TicketController.getRecentUpdates);
 

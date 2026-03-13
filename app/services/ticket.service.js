@@ -76,28 +76,6 @@ exports.getUserTickets = async (userId) => {
   }
 };
 
-exports.getUserPendingTickets = async (userId) => {
-  try {
-    if (!userId) return { status: 400, message: 'ID do usuário é obrigatório' };
-
-    const tickets = await ticketRepository.getPendingByUserId(userId);
-
-    const sanitized = tickets.map((t) => ({
-      id: t.id,
-      empresa: t.empresa?.name || 'Empresa não informada',
-      tituloReclamacao: t.tituloReclamacao?.title || 'Sem título',
-      descricao: t.description,
-      status: t.status,
-      criadoEm: t.createdAt
-    }));
-
-    return { status: 200, tickets: sanitized };
-  } catch (error) {
-    console.error('❌ SERVICE: Erro ao buscar tickets pendentes:', error);
-    return { status: 500, message: 'Erro ao buscar tickets pendentes.' };
-  }
-};
-
 // ✅ NOVO SERVICE: Buscar tickets abertos e pendentes
 exports.getUserOpenAndPendingTickets = async (userId) => {
   try {
@@ -121,11 +99,11 @@ exports.getUserOpenAndPendingTickets = async (userId) => {
   }
 };
 
-exports.getUserPendingTickets = async (userId) => {
+exports.getUserClosedTickets = async (userId) => {
   try {
     if (!userId) return { status: 400, message: 'ID do usuário é obrigatório' };
 
-    const tickets = await ticketRepository.getPendingByUserId(userId);
+    const tickets = await ticketRepository.getClosedByUserId(userId);
 
     const sanitized = tickets.map((t) => ({
       id: t.id,
@@ -133,13 +111,15 @@ exports.getUserPendingTickets = async (userId) => {
       tituloReclamacao: t.tituloReclamacao?.title || 'Sem título',
       descricao: t.description,
       status: t.status,
-      criadoEm: t.createdAt
+      criadoEm: t.createdAt,
+      finalizadoEm: t.updatedAt
+
     }));
 
     return { status: 200, tickets: sanitized };
   } catch (error) {
-    console.error('❌ SERVICE: Erro ao buscar tickets pendentes:', error);
-    return { status: 500, message: 'Erro ao buscar tickets pendentes.' };
+    console.error('❌ SERVICE: Erro ao buscar tickets finalizados:', error);
+    return { status: 500, message: 'Erro ao buscar tickets finalizados.' };
   }
 };
 
