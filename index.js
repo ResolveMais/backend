@@ -13,7 +13,6 @@ app.use(express.urlencoded({ extended: true }));
 app.use(express.static("public"));
 
 const db = require('./app/models');
-db.sequelize.sync();
 
 routesController(app);
 
