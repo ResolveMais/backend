@@ -231,3 +231,33 @@ VITE_API_URL=http://localhost:3001/api
 - adicionar seed inicial de empresas e assuntos
 - documentar payloads e respostas da API
 - criar testes automatizados
+
+## Chatbot OpenAI (novo)
+
+### Variaveis de ambiente
+
+Adicione no `.env`:
+
+```env
+OPENAI_API_KEY=your_openai_api_key_here
+OPENAI_MODEL=gpt-4.1-mini
+```
+
+### Rotas
+
+Base: `/api/chatbot` (rotas autenticadas com `Authorization: Bearer <token>`)
+
+- `GET /conversation`: retorna conversa ativa e mensagens nao deletadas
+- `POST /message/stream`: envia mensagem e recebe resposta em stream (SSE)
+- `POST /conversation/clear`: limpa conversa com delecao logica (`del = true`)
+
+### Arquitetura aplicada
+
+O modulo foi implementado no padrao:
+
+- `routes/chatbot.routes.js`
+- `controllers/chatbot.controller.js`
+- `services/chatbot.service.js`
+- `repositories/chatbot.repository.js`
+- `models/chatConversation.model.js`
+- `models/chatMessage.model.js`
