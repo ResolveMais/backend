@@ -12,7 +12,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static("public"));
 
-const db = require('./app/models');
+require("./app/models");
 
 routesController(app);
 
