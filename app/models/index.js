@@ -10,7 +10,7 @@ const sequelize = new Sequelize(dbConfig.DB, dbConfig.USER, dbConfig.PASSWORD, {
     logging: false,
     dialectOptions: {
         options: {
-            encrypt: false,
+            encrypt: true,
             trustServerCertificate: true,
         },
     },
