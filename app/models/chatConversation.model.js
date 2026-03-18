@@ -16,6 +16,10 @@ module.exports = (sequelize, Sequelize) => {
         type: Sequelize.DATE,
         allowNull: true,
       },
+      ticket_id: {
+        type: Sequelize.INTEGER,
+        allowNull: true,
+      },
       createdAt: {
         type: Sequelize.DATE,
         allowNull: false,
@@ -32,7 +36,7 @@ module.exports = (sequelize, Sequelize) => {
       timestamps: false,
       indexes: [
         {
-          fields: ["user_id", "del", "createdAt"],
+          fields: ["user_id", "ticket_id", "del", "createdAt"],
         },
       ],
     }
@@ -42,6 +46,11 @@ module.exports = (sequelize, Sequelize) => {
     ChatConversation.belongsTo(models.User, {
       foreignKey: "user_id",
       as: "user",
+    });
+
+    ChatConversation.belongsTo(models.Ticket, {
+      foreignKey: "ticket_id",
+      as: "ticket",
     });
 
     ChatConversation.hasMany(models.ChatMessage, {

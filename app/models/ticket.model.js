@@ -52,10 +52,16 @@ module.exports = (sequelize, Sequelize) => {
       as: 'tituloReclamacao',
     });
 
-    // ✅ NOVA ASSOCIAÇÃO: Um ticket pode ter várias atualizações
+    // Um ticket pode ter várias atualizações
     Ticket.hasMany(models.TicketUpdate, {
       foreignKey: 'ticket_id',
       as: 'updates',
+    });
+
+    // Um ticket pode ter várias conversas do chatbot
+    Ticket.hasMany(models.ChatConversation, {
+      foreignKey: 'ticket_id',
+      as: 'chatConversations',
     });
   };
 

@@ -71,6 +71,22 @@ module.exports = {
       throw error;
     }
   },
+  getByIdForUser: async ({ ticketId, userId }) => {
+    try {
+      const ticket = await TicketModel.findOne({
+        where: { id: ticketId, user_id: userId },
+        attributes: ['id', 'description', 'status', 'createdAt', 'updatedAt', 'lastUpdateMessage'],
+        include: [
+          { model: Company, as: 'empresa', attributes: ['name'] },
+          { model: ComplaintTitle, as: 'tituloReclamacao', attributes: ['title'] }
+        ]
+      });
+      return ticket;
+    } catch (error) {
+      console.error('❌ REPOSITORY: Erro ao buscar ticket por ID:', error);
+      throw error;
+    }
+  },
 
   getClosedByUserId: async (userId) => {
     try {

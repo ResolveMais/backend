@@ -7,29 +7,46 @@ const {
 const ACTIVE_CONVERSATION_WHERE = { del: false };
 
 module.exports = {
-  getConversationByIdForUser: async ({ conversationId, userId }) => {
-    return ChatConversation.findOne({
-      where: {
-        id: conversationId,
-        user_id: userId,
-        ...ACTIVE_CONVERSATION_WHERE,
-      },
-    });
+  getConversationByIdForUser: async ({ conversationId, userId, ticketId = null }) => {
+    const whereClause = {
+      id: conversationId,
+      user_id: userId,
+      ...ACTIVE_CONVERSATION_WHERE,
+    };
+
+    if (ticketId) {
+      whereClause.ticket_id = ticketId;
+    }
+
+    return ChatConversation.findOne({ where: whereClause });
   },
 
   getActiveConversationByUserId: async (userId) => {
     return ChatConversation.findOne({
       where: {
         user_id: userId,
+        ticket_id: null,
         ...ACTIVE_CONVERSATION_WHERE,
       },
       order: [["createdAt", "DESC"]],
     });
   },
 
-  createConversation: async ({ userId }) => {
+  getActiveConversationByUserAndTicketId: async ({ userId, ticketId }) => {
+    return ChatConversation.findOne({
+      where: {
+        user_id: userId,
+        ticket_id: ticketId,
+        ...ACTIVE_CONVERSATION_WHERE,
+      },
+      order: [["createdAt", "DESC"]],
+    });
+  },
+
+  createConversation: async ({ userId, ticketId = null }) => {
     return ChatConversation.create({
       user_id: userId,
+      ticket_id: ticketId,
     });
   },
 

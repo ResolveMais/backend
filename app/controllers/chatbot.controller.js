@@ -8,6 +8,7 @@ const sendSseEvent = (res, eventName, payload) => {
 exports.getConversation = async (req, res) => {
   const response = await chatbotService.getConversation({
     userId: req.user?.id,
+    ticketId: req.query?.ticketId || null,
   });
 
   return res.status(response.status).json(response);
@@ -17,13 +18,14 @@ exports.clearConversation = async (req, res) => {
   const response = await chatbotService.clearConversation({
     userId: req.user?.id,
     conversationId: req.body?.conversationId || null,
+    ticketId: req.body?.ticketId || null,
   });
 
   return res.status(response.status).json(response);
 };
 
 exports.streamMessage = async (req, res) => {
-  const { message, conversationId = null } = req.body || {};
+  const { message, conversationId = null, ticketId = null } = req.body || {};
 
   if (!message || !String(message).trim()) {
     return res
@@ -56,6 +58,7 @@ exports.streamMessage = async (req, res) => {
       userId: req.user.id,
       message,
       conversationId,
+      ticketId,
       abortSignal: abortController.signal,
       onStart: (payload) => sendSseEvent(res, "start", payload),
       onToken: (token) => sendSseEvent(res, "token", { token }),

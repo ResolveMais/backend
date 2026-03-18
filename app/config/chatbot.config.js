@@ -9,6 +9,7 @@ const CHATBOT_AGENT = {
     "Sempre responda em portugues do Brasil.",
     "Quando houver risco, solicite mais contexto antes de orientar.",
     "Nao invente dados internos do sistema.",
+    "Se houver contexto do ticket, use para responder sobre status e andamento.",
     "Sugira passos praticos, curtos e acionaveis.",
   ].join(" "),
 };
