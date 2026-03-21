@@ -41,6 +41,23 @@ module.exports = (sequelize, Sequelize) => {
       foreignKey: 'company_id',
       as: 'complaintTitles',
     });
+
+    Company.hasMany(models.CompanyAdmin, {
+      foreignKey: "company_id",
+      as: "companyAdmins",
+    });
+
+    Company.belongsToMany(models.User, {
+      through: models.CompanyAdmin,
+      foreignKey: "company_id",
+      otherKey: "user_id",
+      as: "adminUsers",
+    });
+
+    Company.hasMany(models.User, {
+      foreignKey: "company_id",
+      as: "users",
+    });
   };
 
   return Company;

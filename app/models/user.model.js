@@ -14,13 +14,30 @@ module.exports = (sequelize, Sequelize) => {
             allowNull: false,
             unique: true,
         },
+        userType: {
+            type: Sequelize.STRING(20),
+            allowNull: false,
+            defaultValue: 'cliente',
+            field: 'user_type',
+            validate: {
+                isIn: [['cliente', 'funcionario', 'empresa']],
+            },
+        },
         phone: {
             type: Sequelize.STRING(20),
         },
         cpf: {
             type: Sequelize.STRING(14),
-            allowNull: false,
-            unique: true,
+            allowNull: true,
+        },
+        cnpj: {
+            type: Sequelize.STRING(18),
+            allowNull: true,
+        },
+        companyId: {
+            type: Sequelize.INTEGER,
+            allowNull: true,
+            field: "company_id",
         },
         password: {
             type: Sequelize.STRING,
@@ -33,6 +50,25 @@ module.exports = (sequelize, Sequelize) => {
 		tableName: "User",
 		timestamps: false,
 	});
+
+    User.associate = (models) => {
+        User.hasMany(models.CompanyAdmin, {
+            foreignKey: "user_id",
+            as: "companyAdminLinks",
+        });
+
+        User.belongsToMany(models.Company, {
+            through: models.CompanyAdmin,
+            foreignKey: "user_id",
+            otherKey: "company_id",
+            as: "adminCompanies",
+        });
+
+        User.belongsTo(models.Company, {
+            foreignKey: "company_id",
+            as: "company",
+        });
+    };
 
 	return User;
 };
