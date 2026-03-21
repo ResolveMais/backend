@@ -2,12 +2,19 @@ const userRepository = require("../repositories/user.repository");
 
 exports.updateProfile = async (req, res) => {
     const userId = req.user.id;
-    const { name, email, cpf, phone } = req.body;
+    const { name, email, cpf, cnpj, phone } = req.body;
 
     try {
-        const updated = await userRepository.update(userId, { name, email, cpf, phone });
+        const payload = {};
+        if (name !== undefined) payload.name = name;
+        if (email !== undefined) payload.email = email;
+        if (cpf !== undefined) payload.cpf = cpf;
+        if (cnpj !== undefined) payload.cnpj = cnpj;
+        if (phone !== undefined) payload.phone = phone;
 
-        if (updated === 0) return res.status(404).json({ error: 'User not found or no changes made' });
+        const updated = await userRepository.update(userId, payload);
+
+        if (!updated) return res.status(404).json({ error: 'User not found or no changes made' });
 
         return res.status(200).json({ message: 'Profile updated successfully' });
     } catch (error) {
