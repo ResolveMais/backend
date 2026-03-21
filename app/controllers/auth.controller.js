@@ -9,9 +9,37 @@ exports.login = async (req, res) => {
 };
 
 exports.register = async (req, res) => {
-  const { name, email, password, cpf, phone, birthDate } = req.body;
+  const {
+    name,
+    email,
+    password,
+    userType,
+    cpf,
+    cnpj,
+    documentNumber,
+    phone,
+    birthDate,
+    companyName,
+    companyDescription,
+    companyCnpj,
+    adminUser,
+  } = req.body;
 
-  const response = await authService.register({ name, email, password, cpf, phone, birthDate });
+  const response = await authService.register({
+    name,
+    email,
+    password,
+    userType,
+    cpf,
+    cnpj,
+    documentNumber,
+    phone,
+    birthDate,
+    companyName,
+    companyDescription,
+    companyCnpj,
+    adminUser,
+  });
 
   return res.status(response.status).json({ ...response });
 };

@@ -37,7 +37,7 @@ const parseTicketId = (ticketId) => {
 
   const parsed = Number(ticketId);
   if (!Number.isInteger(parsed) || parsed <= 0) {
-    throw createServiceError("Ticket invalido.", 400);
+    throw createServiceError("Ticket inválido.", 400);
   }
 
   return parsed;
