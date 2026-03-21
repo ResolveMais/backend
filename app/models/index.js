@@ -20,7 +20,13 @@ sequelize
     .authenticate()
     .then(() => {
         console.log("Connection has been established successfully.");
-        sequelize.sync();
+        if (process.env.DB_SYNC_ON_BOOT === "true") {
+            console.log("DB_SYNC_ON_BOOT=true, running sequelize.sync()");
+            sequelize.sync();
+            return;
+        }
+
+        console.log("Database sync skipped. Use migrations with sequelize-cli.");
     }).catch((err) => {
         console.log("Database connection is not working!", err);
     });
