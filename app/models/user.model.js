@@ -34,6 +34,16 @@ module.exports = (sequelize, Sequelize) => {
             type: Sequelize.STRING(18),
             allowNull: true,
         },
+        avatarUrl: {
+            type: Sequelize.STRING(500),
+            allowNull: true,
+            field: "avatar_url",
+        },
+        jobTitle: {
+            type: Sequelize.STRING(120),
+            allowNull: true,
+            field: "job_title",
+        },
         companyId: {
             type: Sequelize.INTEGER,
             allowNull: true,
