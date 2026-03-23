@@ -1,9 +1,9 @@
 const { User: UserModel } = require('../models');
 
-const baseUserAttributes = ['id', 'name', 'email', 'userType', 'cpf', 'cnpj', 'phone', 'birthDate', 'companyId'];
+const baseUserAttributes = ['id', 'name', 'email', 'userType', 'cpf', 'cnpj', 'phone', 'avatarUrl', 'jobTitle', 'birthDate', 'companyId'];
 
 module.exports = {
-    create: async ({ name, email, password, userType, cpf, cnpj, phone, birthDate, companyId = null }, options = {}) => {
+    create: async ({ name, email, password, userType, cpf, cnpj, phone, avatarUrl = null, jobTitle = null, birthDate, companyId = null }, options = {}) => {
         try {
             const newUser = await UserModel.create({
                 name,
@@ -13,6 +13,8 @@ module.exports = {
                 cpf,
                 cnpj,
                 phone,
+                avatarUrl,
+                jobTitle,
                 birthDate,
                 companyId,
             }, {
