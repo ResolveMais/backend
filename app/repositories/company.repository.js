@@ -22,8 +22,21 @@ module.exports = {
     return CompanyModel.findOne({ where: { cnpj }, ...options });
   },
 
+  getByName: async (name, options = {}) => {
+    return CompanyModel.findOne({ where: { name }, ...options });
+  },
+
   create: async ({ name, description, cnpj }, options = {}) => {
     return CompanyModel.create({ name, description, cnpj }, options);
+  },
+
+  update: async (id, payload, options = {}) => {
+    const [updatedRowsCount] = await CompanyModel.update(payload, {
+      where: { id },
+      ...options,
+    });
+
+    return updatedRowsCount > 0;
   },
 
   getByAdminUserId: async (userId, options = {}) => {
@@ -49,7 +62,7 @@ module.exports = {
         {
           model: UserModel,
           as: 'user',
-          attributes: ['id', 'name', 'email', 'phone', 'cpf', 'userType'],
+          attributes: ['id', 'name', 'email', 'phone', 'cpf', 'avatarUrl', 'jobTitle', 'userType'],
         },
       ],
       order: [['isPrimary', 'DESC'], ['id', 'ASC']],
