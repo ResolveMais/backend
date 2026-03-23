@@ -94,7 +94,7 @@ exports.login = async ({ email, password }) => {
       token,
     };
   } catch (error) {
-    console.error('Error during login: ' + error.message);
+    console.error('Error during login: ' + error);
     return { status: 500, message: 'Login failed' };
   }
 };
