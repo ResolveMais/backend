@@ -10,6 +10,7 @@ const USER_TYPES = Object.freeze({
 });
 
 const normalizeDigits = (value = '') => String(value).replace(/\D/g, '');
+const normalizeText = (value = '') => String(value).trim();
 
 const formatCompanySnapshot = (company) => ({
   id: company.id,
@@ -24,6 +25,8 @@ const formatAdminResponse = (adminLink) => ({
   email: adminLink?.user?.email,
   phone: adminLink?.user?.phone,
   cpf: adminLink?.user?.cpf,
+  avatarUrl: adminLink?.user?.avatarUrl || null,
+  jobTitle: adminLink?.user?.jobTitle || null,
   userType: adminLink?.user?.userType,
   companyId: adminLink?.user?.companyId,
   isPrimary: Boolean(adminLink?.isPrimary),
@@ -35,6 +38,8 @@ const formatEmployeeResponse = (user) => ({
   email: user.email,
   phone: user.phone,
   cpf: user.cpf,
+  avatarUrl: user.avatarUrl || null,
+  jobTitle: user.jobTitle || null,
   userType: user.userType,
   companyId: user.companyId,
 });
@@ -99,14 +104,58 @@ exports.getMyCompanyEmployees = async (authUserId) => {
   };
 };
 
+exports.updateMyCompanyProfile = async (authUserId, payload) => {
+  const context = await getCompanyDataForAdmin(authUserId);
+  if (context.error) return context.error;
+
+  if (payload?.cnpj !== undefined) {
+    return { status: 400, message: 'CNPJ cannot be updated after company registration' };
+  }
+
+  const updatePayload = {};
+
+  if (payload?.name !== undefined) {
+    const normalizedName = normalizeText(payload.name);
+    if (!normalizedName) {
+      return { status: 400, message: 'Company name cannot be empty' };
+    }
+
+    const duplicatedName = await companyRepository.getByName(normalizedName);
+    if (duplicatedName && Number(duplicatedName.id) !== Number(context.company.id)) {
+      return { status: 400, message: 'Company name already in use' };
+    }
+
+    updatePayload.name = normalizedName;
+  }
+
+  if (payload?.description !== undefined) {
+    updatePayload.description = normalizeText(payload.description);
+  }
+
+  if (Object.keys(updatePayload).length === 0) {
+    return { status: 400, message: 'No company profile fields provided for update' };
+  }
+
+  await companyRepository.update(context.company.id, updatePayload);
+
+  const company = await companyRepository.getById(context.company.id);
+
+  return {
+    status: 200,
+    message: 'Company profile updated successfully',
+    company: formatCompanySnapshot(company),
+  };
+};
+
 exports.addMyCompanyEmployee = async (authUserId, payload) => {
   const context = await getCompanyDataForAdmin(authUserId);
   if (context.error) return context.error;
 
-  const name = String(payload?.name || '').trim();
-  const email = String(payload?.email || '').trim();
-  const password = String(payload?.password || '').trim();
-  const phone = payload?.phone || null;
+  const name = normalizeText(payload?.name || '');
+  const email = normalizeText(payload?.email || '');
+  const password = normalizeText(payload?.password || '');
+  const phone = payload?.phone ? normalizeText(payload.phone) : null;
+  const jobTitle = payload?.jobTitle ? normalizeText(payload.jobTitle) : null;
   const cpfDigits = normalizeDigits(payload?.cpf);
 
   if (!name || !email || !password || cpfDigits.length !== 11) {
@@ -134,6 +183,7 @@ exports.addMyCompanyEmployee = async (authUserId, payload) => {
     cpf: cpfDigits,
     cnpj: null,
     phone,
+    jobTitle,
     birthDate: null,
     companyId: context.company.id,
   });
@@ -143,6 +193,65 @@ exports.addMyCompanyEmployee = async (authUserId, payload) => {
   return {
     status: 201,
     message: 'Employee created successfully',
+    company: formatCompanySnapshot(context.company),
+    employees,
+  };
+};
+
+exports.updateMyCompanyEmployee = async (authUserId, employeeUserId, payload) => {
+  const context = await getCompanyDataForAdmin(authUserId);
+  if (context.error) return context.error;
+
+  if (payload?.cpf !== undefined || payload?.cnpj !== undefined) {
+    return { status: 400, message: 'CPF/CNPJ cannot be updated after registration' };
+  }
+
+  const employee = await userRepository.getById(Number(employeeUserId));
+  if (!employee) return { status: 404, message: 'Employee not found' };
+
+  if (employee.userType !== USER_TYPES.FUNCIONARIO || employee.companyId !== context.company.id) {
+    return { status: 400, message: 'User is not an employee of this company' };
+  }
+
+  const updatePayload = {};
+
+  if (payload?.name !== undefined) {
+    const normalizedName = normalizeText(payload.name);
+    if (!normalizedName) return { status: 400, message: 'Name cannot be empty' };
+    updatePayload.name = normalizedName;
+  }
+
+  if (payload?.email !== undefined) {
+    const normalizedEmail = normalizeText(payload.email);
+    if (!normalizedEmail) return { status: 400, message: 'E-mail cannot be empty' };
+
+    const existingEmail = await userRepository.getByEmail(normalizedEmail);
+    if (existingEmail && Number(existingEmail.id) !== Number(employee.id)) {
+      return { status: 400, message: 'E-mail already registered' };
+    }
+
+    updatePayload.email = normalizedEmail;
+  }
+
+  if (payload?.phone !== undefined) {
+    updatePayload.phone = payload?.phone ? normalizeText(payload.phone) : null;
+  }
+
+  if (payload?.jobTitle !== undefined) {
+    updatePayload.jobTitle = payload?.jobTitle ? normalizeText(payload.jobTitle) : null;
+  }
+
+  if (Object.keys(updatePayload).length === 0) {
+    return { status: 400, message: 'No employee fields provided for update' };
+  }
+
+  await userRepository.update(employee.id, updatePayload);
+
+  const employees = await getCompanyEmployees(context.company.id);
+
+  return {
+    status: 200,
+    message: 'Employee updated successfully',
     company: formatCompanySnapshot(context.company),
     employees,
   };
@@ -205,13 +314,14 @@ exports.addMyCompanyAdmin = async (authUserId, payload) => {
     const hashedPassword = await bcrypt.hash(String(payload.password), 10);
 
     newUserPayload = {
-      name: String(payload.name).trim(),
+      name: normalizeText(payload.name),
       email: existingEmail,
       password: hashedPassword,
       userType: USER_TYPES.FUNCIONARIO,
       cpf: cpfDigits,
       cnpj: null,
-      phone: payload.phone || null,
+      phone: payload.phone ? normalizeText(payload.phone) : null,
+      jobTitle: payload?.jobTitle ? normalizeText(payload.jobTitle) : null,
       birthDate: null,
       companyId: context.company.id,
     };
