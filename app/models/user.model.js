@@ -67,6 +67,11 @@ module.exports = (sequelize, Sequelize) => {
             as: "companyAdminLinks",
         });
 
+        User.hasMany(models.PasswordResetToken, {
+            foreignKey: "user_id",
+            as: "passwordResetTokens",
+        });
+
         User.belongsToMany(models.Company, {
             through: models.CompanyAdmin,
             foreignKey: "user_id",
