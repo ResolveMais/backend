@@ -1,8 +1,11 @@
 const bcrypt = require('bcrypt');
+const crypto = require('crypto');
 const { sequelize } = require('../models');
 const userRepository = require('../repositories/user.repository');
 const companyRepository = require('../repositories/company.repository');
+const passwordResetTokenRepository = require('../repositories/passwordResetToken.repository');
 const jwt = require('../utils/jwt');
+const { sendPasswordResetEmail } = require('../utils/mailer');
 
 const USER_TYPES = Object.freeze({
   CLIENTE: 'cliente',
@@ -20,6 +23,13 @@ const USER_TYPE_ALIASES = Object.freeze({
 });
 
 const normalizeDigits = (value = '') => String(value).replace(/\D/g, '');
+const normalizeText = (value = '') => String(value).trim();
+const hashToken = (value = '') => crypto.createHash('sha256').update(String(value)).digest('hex');
+const RESET_PASSWORD_EXPIRES_MINUTES = (() => {
+  const parsed = Number(process.env.RESET_PASSWORD_EXPIRES_MINUTES || 30);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 30;
+})();
+const RESET_PASSWORD_SUCCESS_MESSAGE = 'Se uma conta com esse e-mail existir, um link para redefinir a senha foi enviado.';
 
 const normalizeUserType = (userType = '') => USER_TYPE_ALIASES[String(userType).trim().toLowerCase()] || null;
 
@@ -96,6 +106,118 @@ exports.login = async ({ email, password }) => {
   } catch (error) {
     console.error('Error during login: ' + error);
     return { status: 500, message: 'Login failed' };
+  }
+};
+
+exports.forgotPassword = async ({ email }) => {
+  try {
+    const normalizedEmail = normalizeText(email);
+    if (!normalizedEmail) {
+      return { status: 400, message: 'E-mail is required' };
+    }
+
+    const user = await userRepository.getByEmail(normalizedEmail);
+    if (!user) {
+      return { status: 200, message: RESET_PASSWORD_SUCCESS_MESSAGE };
+    }
+
+    const rawToken = crypto.randomBytes(32).toString('hex');
+    const tokenHash = hashToken(rawToken);
+    const expiresAt = new Date(Date.now() + RESET_PASSWORD_EXPIRES_MINUTES * 60 * 1000);
+
+    await sequelize.transaction(async (transaction) => {
+      await passwordResetTokenRepository.markAllAsUsedByUserId(user.id, { transaction });
+      await passwordResetTokenRepository.create(
+        {
+          userId: user.id,
+          tokenHash,
+          expiresAt,
+        },
+        { transaction }
+      );
+    });
+
+    const appUrl = normalizeText(process.env.APP_URL || 'http://localhost:5173');
+    const resetUrl = `${appUrl}/reset-password?token=${encodeURIComponent(rawToken)}`;
+
+    try {
+      await sendPasswordResetEmail({
+        to: user.email,
+        name: user.name,
+        resetUrl,
+        expiresInMinutes: RESET_PASSWORD_EXPIRES_MINUTES,
+      });
+    } catch (mailError) {
+      console.error('Error sending password reset e-mail: ' + mailError.message);
+    }
+
+    return { status: 200, message: RESET_PASSWORD_SUCCESS_MESSAGE };
+  } catch (error) {
+    console.error('Error during forgotPassword: ' + error.message);
+    return { status: 500, message: 'Failed to process password reset request' };
+  }
+};
+
+exports.resetPassword = async ({ token, newPassword }) => {
+  try {
+    const normalizedToken = normalizeText(token);
+    const normalizedPassword = String(newPassword || '');
+
+    if (!normalizedToken || !normalizedPassword) {
+      return { status: 400, message: 'Token and new password are required' };
+    }
+
+    if (normalizedPassword.length < 6) {
+      return { status: 400, message: 'Password must have at least 6 characters' };
+    }
+
+    const tokenHash = hashToken(normalizedToken);
+    const tokenRecord = await passwordResetTokenRepository.getActiveByTokenHash(tokenHash);
+
+    if (!tokenRecord) {
+      return { status: 400, message: 'O token está inválido ou expirado' };
+    }
+
+    if (new Date(tokenRecord.expiresAt).getTime() < Date.now()) {
+      return { status: 400, message: 'O token está inválido ou expirado' };
+    }
+
+    const hashedPassword = await bcrypt.hash(normalizedPassword, 10);
+
+    await sequelize.transaction(async (transaction) => {
+      await userRepository.update(tokenRecord.user.id, { password: hashedPassword }, { transaction });
+      await passwordResetTokenRepository.markAllAsUsedByUserId(tokenRecord.user.id, { transaction });
+    });
+
+    return { status: 200, message: 'Senha redefinida com sucesso' };
+  } catch (error) {
+    console.error('Error during resetPassword: ' + error.message);
+    return { status: 500, message: 'Erro ao redefinir senha' };
+  }
+};
+
+exports.validateResetToken = async ({ token }) => {
+  try {
+    const normalizedToken = normalizeText(token);
+    if (!normalizedToken) {
+      return { status: 400, message: 'Token is required' };
+    }
+
+    const tokenHash = hashToken(normalizedToken);
+    const tokenRecord = await passwordResetTokenRepository.getActiveByTokenHash(tokenHash);
+
+    if (!tokenRecord) {
+      return { status: 400, message: 'Invalid or expired reset token' };
+    }
+
+    if (new Date(tokenRecord.expiresAt).getTime() < Date.now()) {
+      return { status: 400, message: 'Invalid or expired reset token' };
+    }
+
+    return { status: 200, message: 'Valid reset token' };
+  } catch (error) {
+    console.error('Error during validateResetToken: ' + error.message);
+    return { status: 500, message: 'Failed to validate reset token' };
   }
 };
 
