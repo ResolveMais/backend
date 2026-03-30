@@ -1,4 +1,10 @@
-const { Company: CompanyModel, CompanyAdmin: CompanyAdminModel, User: UserModel } = require('../models');
+const {
+  Company: CompanyModel,
+  CompanyAdmin: CompanyAdminModel,
+  User: UserModel,
+  ComplaintTitle: ComplaintTitleModel,
+  Ticket: TicketModel,
+} = require('../models');
 
 module.exports = {
   getAll: async () => {
@@ -126,6 +132,50 @@ module.exports = {
       where: {
         company_id: companyId,
         user_id: userId,
+      },
+      ...options,
+    });
+  },
+
+  listComplaintTitles: async (companyId, options = {}) => {
+    return ComplaintTitleModel.findAll({
+      where: { company_id: companyId },
+      attributes: ['id', 'title', 'description'],
+      order: [['title', 'ASC'], ['id', 'ASC']],
+      ...options,
+    });
+  },
+
+  getComplaintTitleById: async (complaintTitleId, options = {}) => {
+    return ComplaintTitleModel.findByPk(complaintTitleId, options);
+  },
+
+  createComplaintTitle: async ({ companyId, title, description = null }, options = {}) => {
+    return ComplaintTitleModel.create(
+      {
+        company_id: companyId,
+        title,
+        description,
+      },
+      options
+    );
+  },
+
+  countTicketsByComplaintTitle: async ({ companyId, complaintTitleId }, options = {}) => {
+    return TicketModel.count({
+      where: {
+        company_id: companyId,
+        complaintTitle_id: complaintTitleId,
+      },
+      ...options,
+    });
+  },
+
+  removeComplaintTitle: async ({ companyId, complaintTitleId }, options = {}) => {
+    return ComplaintTitleModel.destroy({
+      where: {
+        id: complaintTitleId,
+        company_id: companyId,
       },
       ...options,
     });

@@ -44,6 +44,12 @@ const formatEmployeeResponse = (user) => ({
   companyId: user.companyId,
 });
 
+const formatComplaintTitleResponse = (complaintTitle) => ({
+  id: complaintTitle.id,
+  title: complaintTitle.title,
+  description: complaintTitle.description || '',
+});
+
 const getCompanyFromAdminUser = async (userId) => {
   const company = await companyRepository.getByAdminUserId(userId);
   return company || null;
@@ -104,6 +110,21 @@ exports.getMyCompanyEmployees = async (authUserId) => {
   };
 };
 
+exports.getMyCompanyComplaintTitles = async (authUserId) => {
+  const context = await getCompanyDataForAdmin(authUserId);
+  if (context.error) return context.error;
+
+  const complaintTitles = await companyRepository.listComplaintTitles(context.company.id);
+
+  return {
+    status: 200,
+    company: formatCompanySnapshot(context.company),
+    complaintTitles: complaintTitles.map((complaintTitle) =>
+      formatComplaintTitleResponse(complaintTitle.get({ plain: true }))
+    ),
+  };
+};
+
 exports.updateMyCompanyProfile = async (authUserId, payload) => {
   const context = await getCompanyDataForAdmin(authUserId);
   if (context.error) return context.error;
@@ -144,6 +165,97 @@ exports.updateMyCompanyProfile = async (authUserId, payload) => {
     status: 200,
     message: 'Company profile updated successfully',
     company: formatCompanySnapshot(company),
+  };
+};
+
+exports.addMyCompanyComplaintTitle = async (authUserId, payload) => {
+  const context = await getCompanyDataForAdmin(authUserId);
+  if (context.error) return context.error;
+
+  const title = normalizeText(payload?.title || '');
+  const description = normalizeText(payload?.description || '');
+
+  if (!title) {
+    return { status: 400, message: 'O assunto da reclamacao nao pode ficar vazio' };
+  }
+
+  if (title.length > 100) {
+    return { status: 400, message: 'O assunto da reclamacao deve ter no maximo 100 caracteres' };
+  }
+
+  if (description.length > 255) {
+    return { status: 400, message: 'A descricao do assunto deve ter no maximo 255 caracteres' };
+  }
+
+  const currentComplaintTitles = await companyRepository.listComplaintTitles(context.company.id);
+  const duplicatedComplaintTitle = currentComplaintTitles.find(
+    (complaintTitle) => normalizeText(complaintTitle.title).toLowerCase() === title.toLowerCase()
+  );
+
+  if (duplicatedComplaintTitle) {
+    return { status: 400, message: 'Ja existe um assunto com esse nome para a empresa' };
+  }
+
+  await companyRepository.createComplaintTitle({
+    companyId: context.company.id,
+    title,
+    description: description || null,
+  });
+
+  const complaintTitles = await companyRepository.listComplaintTitles(context.company.id);
+
+  return {
+    status: 201,
+    message: 'Assunto cadastrado com sucesso',
+    company: formatCompanySnapshot(context.company),
+    complaintTitles: complaintTitles.map((complaintTitle) =>
+      formatComplaintTitleResponse(complaintTitle.get({ plain: true }))
+    ),
+  };
+};
+
+exports.removeMyCompanyComplaintTitle = async (authUserId, complaintTitleId) => {
+  const context = await getCompanyDataForAdmin(authUserId);
+  if (context.error) return context.error;
+
+  const parsedComplaintTitleId = Number(complaintTitleId);
+
+  if (!Number.isInteger(parsedComplaintTitleId) || parsedComplaintTitleId <= 0) {
+    return { status: 400, message: 'Assunto de reclamacao invalido' };
+  }
+
+  const complaintTitle = await companyRepository.getComplaintTitleById(parsedComplaintTitleId);
+
+  if (!complaintTitle || Number(complaintTitle.company_id) !== Number(context.company.id)) {
+    return { status: 404, message: 'Assunto de reclamacao nao encontrado para a empresa' };
+  }
+
+  const linkedTicketsCount = await companyRepository.countTicketsByComplaintTitle({
+    companyId: context.company.id,
+    complaintTitleId: parsedComplaintTitleId,
+  });
+
+  if (linkedTicketsCount > 0) {
+    return {
+      status: 400,
+      message: 'Nao e possivel remover um assunto ja utilizado em tickets',
+    };
+  }
+
+  await companyRepository.removeComplaintTitle({
+    companyId: context.company.id,
+    complaintTitleId: parsedComplaintTitleId,
+  });
+
+  const complaintTitles = await companyRepository.listComplaintTitles(context.company.id);
+
+  return {
+    status: 200,
+    message: 'Assunto removido com sucesso',
+    company: formatCompanySnapshot(context.company),
+    complaintTitles: complaintTitles.map((complaintTitle) =>
+      formatComplaintTitleResponse(complaintTitle.get({ plain: true }))
+    ),
   };
 };
 
