@@ -1,9 +1,9 @@
-const express = require('express');
-const router = express.Router();
+import express from "express";
+import UserController from "../controllers/user.controller.js";
+import authMiddleware from "../middlewares/auth.middleware.js";
 
-const UserController = require('../controllers/user.controller.js');
-const authMiddleware = require('../middlewares/auth.middleware.js');
+const router = express.Router();
 
 router.patch("/update-profile", authMiddleware, UserController.updateProfile);
 
-module.exports = { alias: "/api/users", router };
+export default { alias: "/api/users", router };

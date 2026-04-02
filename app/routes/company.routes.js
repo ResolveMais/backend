@@ -1,9 +1,8 @@
-const express = require('express');
+import express from "express";
+import CompanyController from "../controllers/company.controller.js";
+import authMiddleware from "../middlewares/auth.middleware.js";
+
 const router = express.Router();
-
-const authMiddleware = require('../middlewares/auth.middleware.js');
-
-const CompanyController = require('../controllers/company.controller.js');
 
 router.get("/all", CompanyController.getAll);
 router.get("/my-company/admins", authMiddleware, CompanyController.getMyCompanyAdmins);
@@ -19,4 +18,4 @@ router.patch("/my-company/employees/:employeeUserId", authMiddleware, CompanyCon
 router.delete("/my-company/employees/:employeeUserId", authMiddleware, CompanyController.removeMyCompanyEmployee);
 router.delete("/my-company/complaint-titles/:complaintTitleId", authMiddleware, CompanyController.removeMyCompanyComplaintTitle);
 
-module.exports = { alias: "/api/companies", router };
+export default { alias: "/api/companies", router };

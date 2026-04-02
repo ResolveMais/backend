@@ -1,14 +1,17 @@
-const fs = require("fs");
-const path = require("path");
+import authRoute from "./auth.routes.js";
+import chatbotRoute from "./chatbot.routes.js";
+import companyRoute from "./company.routes.js";
+import ticketRoute from "./ticket.routes.js";
+import userRoute from "./user.routes.js";
+
+const routes = [authRoute, chatbotRoute, companyRoute, ticketRoute, userRoute];
 
 const routesController = (app) => {
-    const currentDirectoryPath = path.join(__dirname);
-    const files = fs.readdirSync(currentDirectoryPath);
-    const routeFiles = files.filter((file) => file.endsWith(".routes.js"));
-    routeFiles.forEach((file) => {
-        const route = require(path.join(currentDirectoryPath, file));
-        app.use(route.alias, route.router);
-    });
+  routes.forEach(({ alias, router }) => {
+    app.use(alias, router);
+  });
 };
 
-module.exports = { routesController };
+export { routesController };
+
+export default { routesController };

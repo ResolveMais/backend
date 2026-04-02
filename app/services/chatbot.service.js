@@ -1,7 +1,7 @@
-const OpenAI = require("openai");
-const chatbotRepository = require("../repositories/chatbot.repository");
-const ticketRepository = require("../repositories/ticket.repository");
-const { CHATBOT_AGENT } = require("../config/chatbot.config");
+import OpenAI from "openai";
+import { CHATBOT_AGENT } from "../config/chatbot.config.js";
+import chatbotRepository from "../repositories/chatbot.repository.js";
+import ticketRepository from "../repositories/ticket.repository.js";
 
 const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-4.1-mini";
 const MAX_HISTORY_MESSAGES = 20;
@@ -83,12 +83,11 @@ const buildTicketContextPrompt = (ticket) => {
 
 const ensureConversation = async ({ userId, conversationId, ticketId = null }) => {
   if (conversationId) {
-    const existingConversation =
-      await chatbotRepository.getConversationByIdForUser({
-        conversationId,
-        userId,
-        ticketId,
-      });
+    const existingConversation = await chatbotRepository.getConversationByIdForUser({
+      conversationId,
+      userId,
+      ticketId,
+    });
 
     if (existingConversation) return existingConversation;
   }
@@ -105,8 +104,7 @@ const ensureConversation = async ({ userId, conversationId, ticketId = null }) =
     return chatbotRepository.createConversation({ userId, ticketId });
   }
 
-  const activeConversation =
-    await chatbotRepository.getActiveConversationByUserId(userId);
+  const activeConversation = await chatbotRepository.getActiveConversationByUserId(userId);
 
   if (activeConversation) return activeConversation;
 
@@ -181,17 +179,13 @@ const streamOpenAICompletion = async ({
   } catch (error) {
     const status = error?.status || error?.statusCode || 502;
     const message =
-      error?.message ||
-      (typeof error === "string" ? error : "Erro ao consultar OpenAI.");
+      error?.message || (typeof error === "string" ? error : "Erro ao consultar OpenAI.");
 
-    throw createServiceError(
-      `Erro ao consultar OpenAI: ${message}`.trim(),
-      status
-    );
+    throw createServiceError(`Erro ao consultar OpenAI: ${message}`.trim(), status);
   }
 };
 
-exports.getConversation = async ({ userId, ticketId = null }) => {
+const getConversation = async ({ userId, ticketId = null }) => {
   try {
     if (!userId) {
       return { status: 401, message: "Usuario nao autenticado." };
@@ -213,9 +207,9 @@ exports.getConversation = async ({ userId, ticketId = null }) => {
 
     const conversation = parsedTicketId
       ? await chatbotRepository.getActiveConversationByUserAndTicketId({
-          userId,
-          ticketId: parsedTicketId,
-        })
+        userId,
+        ticketId: parsedTicketId,
+      })
       : await chatbotRepository.getActiveConversationByUserId(userId);
 
     if (!conversation) {
@@ -230,15 +224,15 @@ exports.getConversation = async ({ userId, ticketId = null }) => {
         },
         ticket: ticket
           ? {
-              id: ticket.id,
-              status: ticket.status,
-              description: ticket.description,
-              company: ticket.empresa?.name || null,
-              subject: ticket.tituloReclamacao?.title || null,
-              createdAt: ticket.createdAt,
-              updatedAt: ticket.updatedAt,
-              lastUpdateMessage: ticket.lastUpdateMessage || null,
-            }
+            id: ticket.id,
+            status: ticket.status,
+            description: ticket.description,
+            company: ticket.empresa?.name || null,
+            subject: ticket.tituloReclamacao?.title || null,
+            createdAt: ticket.createdAt,
+            updatedAt: ticket.updatedAt,
+            lastUpdateMessage: ticket.lastUpdateMessage || null,
+          }
           : null,
       };
     }
@@ -263,15 +257,15 @@ exports.getConversation = async ({ userId, ticketId = null }) => {
       },
       ticket: ticket
         ? {
-            id: ticket.id,
-            status: ticket.status,
-            description: ticket.description,
-            company: ticket.empresa?.name || null,
-            subject: ticket.tituloReclamacao?.title || null,
-            createdAt: ticket.createdAt,
-            updatedAt: ticket.updatedAt,
-            lastUpdateMessage: ticket.lastUpdateMessage || null,
-          }
+          id: ticket.id,
+          status: ticket.status,
+          description: ticket.description,
+          company: ticket.empresa?.name || null,
+          subject: ticket.tituloReclamacao?.title || null,
+          createdAt: ticket.createdAt,
+          updatedAt: ticket.updatedAt,
+          lastUpdateMessage: ticket.lastUpdateMessage || null,
+        }
         : null,
     };
   } catch (error) {
@@ -287,7 +281,7 @@ exports.getConversation = async ({ userId, ticketId = null }) => {
   }
 };
 
-exports.clearConversation = async ({
+const clearConversation = async ({
   userId,
   conversationId = null,
   ticketId = null,
@@ -329,7 +323,7 @@ exports.clearConversation = async ({
   }
 };
 
-exports.streamMessage = async ({
+const streamMessage = async ({
   userId,
   message,
   conversationId,
@@ -349,10 +343,7 @@ exports.streamMessage = async ({
 
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
-    throw createServiceError(
-      "Variavel OPENAI_API_KEY nao configurada no backend.",
-      500
-    );
+    throw createServiceError("Variavel OPENAI_API_KEY nao configurada no backend.", 500);
   }
 
   const parsedTicketId = parseTicketId(ticketId);
@@ -386,12 +377,11 @@ exports.streamMessage = async ({
     ticketId: parsedTicketId,
   });
 
-  const recentHistoryDescending =
-    await chatbotRepository.getMessagesByConversationId({
-      conversationId: conversation.id,
-      limit: MAX_HISTORY_MESSAGES,
-      order: "DESC",
-    });
+  const recentHistoryDescending = await chatbotRepository.getMessagesByConversationId({
+    conversationId: conversation.id,
+    limit: MAX_HISTORY_MESSAGES,
+    order: "DESC",
+  });
 
   const historyAscending = [...recentHistoryDescending].reverse();
 
@@ -408,11 +398,11 @@ exports.streamMessage = async ({
     },
     ...(ticket
       ? [
-          {
-            role: "system",
-            content: buildTicketContextPrompt(ticket),
-          },
-        ]
+        {
+          role: "system",
+          content: buildTicketContextPrompt(ticket),
+        },
+      ]
       : []),
     ...mapHistoryToOpenAIMessages(historyAscending),
     {
@@ -444,4 +434,12 @@ exports.streamMessage = async ({
     messageId: assistantMessage.id,
     agent: currentAgent,
   };
+};
+
+export { clearConversation, getConversation, streamMessage };
+
+export default {
+  getConversation,
+  clearConversation,
+  streamMessage,
 };

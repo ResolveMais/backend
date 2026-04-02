@@ -1,4 +1,4 @@
-const nodemailer = require("nodemailer");
+import nodemailer from "nodemailer";
 
 let transporter = null;
 
@@ -51,26 +51,27 @@ const sendPasswordResetEmail = async ({ to, name, resetUrl, expiresInMinutes }) 
   const config = getMailConfig();
   const safeName = String(name || "").trim() || "usuario";
 
-  await getTransporter().sendMail({
-    from: config.from,
-    to,
-    subject: "Recuperação de senha - Resolve Mais",
-    text: [
-      `Olá, ${safeName}.`,
-      "",
-      "Recebemos uma solicitação para redefinir sua senha.",
-      `Use o link abaixo para criar uma nova senha (válido por ${expiresInMinutes} minutos):`,
-      resetUrl,
-      "",
-      "Se você não solicitou esta alteração, ignore este e-mail.",
-    ].join("\n"),
-    html: `
+  await getTransporter()
+    .sendMail({
+      from: config.from,
+      to,
+      subject: "Recuperação de senha - Resolve Mais",
+      text: [
+        `Olá, ${safeName}.`,
+        "",
+        "Recebemos uma solicitação para redefinir sua senha.",
+        `Use o link abaixo para criar uma nova senha (válido por ${expiresInMinutes} minutos):`,
+        resetUrl,
+        "",
+        "Se você não solicitou esta alteração, ignore este e-mail.",
+      ].join("\n"),
+      html: `
     <div style="font-family: Arial, sans-serif; background-color: #f4f6f8; padding: 20px;">
       <table align="center" width="100%" max-width="500px" style="background: #ffffff; border-radius: 10px; padding: 20px;">
         <tr>
           <td align="center">
             <h2 style="color: #00C853; margin-bottom: 10px;">Resolve Mais</h2>
-            <p style="color: #333; font-size: 16px;">Olá, ${safeName} 👋</p>
+            <p style="color: #333; font-size: 16px;">Olá, ${safeName}.</p>
           </td>
         </tr>
 
@@ -114,19 +115,20 @@ const sendPasswordResetEmail = async ({ to, name, resetUrl, expiresInMinutes }) 
       </table>
     </div>
   `,
-  })
+    })
     .then(() => {
-      console.log(`Password reset email sent to ${to}`)
+      console.log(`Password reset email sent to ${to}`);
     })
     .catch((error) => {
-      console.error(`Error sending password reset email to ${to}: ${error.message}`)
+      console.error(`Error sending password reset email to ${to}: ${error.message}`);
     });
 
   return true;
 };
 
-module.exports = {
+export { isMailerConfigured, sendPasswordResetEmail };
+
+export default {
   isMailerConfigured,
   sendPasswordResetEmail,
 };
-

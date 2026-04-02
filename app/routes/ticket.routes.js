@@ -1,8 +1,8 @@
-const express = require('express');
-const router = express.Router();
+import express from "express";
+import TicketController from "../controllers/ticket.controller.js";
+import authMiddleware from "../middlewares/auth.middleware.js";
 
-const TicketController = require('../controllers/ticket.controller.js');
-const authMiddleware = require('../middlewares/auth.middleware.js');
+const router = express.Router();
 
 router.use(authMiddleware);
 
@@ -14,4 +14,4 @@ router.get("/user-closed-tickets", TicketController.getUserClosedTickets);
 router.get("/user-open-pending-tickets", TicketController.getUserOpenAndPendingTickets);
 router.get("/recent-updates", TicketController.getRecentUpdates);
 
-module.exports = { alias: "/api/tickets", router };
+export default { alias: "/api/tickets", router };

@@ -1,4 +1,4 @@
-module.exports = (sequelize, Sequelize) => {
+const initCompanyAdminModel = (sequelize, Sequelize) => {
   const CompanyAdmin = sequelize.define(
     "CompanyAdmin",
     {
@@ -34,3 +34,5 @@ module.exports = (sequelize, Sequelize) => {
 
   return CompanyAdmin;
 };
+
+export default initCompanyAdminModel;

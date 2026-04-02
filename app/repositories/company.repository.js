@@ -1,183 +1,210 @@
-const {
-  Company: CompanyModel,
-  CompanyAdmin: CompanyAdminModel,
-  User: UserModel,
-  ComplaintTitle: ComplaintTitleModel,
-  Ticket: TicketModel,
-} = require('../models');
+import {
+  Company as CompanyModel,
+  CompanyAdmin as CompanyAdminModel,
+  ComplaintTitle as ComplaintTitleModel,
+  Ticket as TicketModel,
+  User as UserModel,
+} from "../models/index.js";
 
-module.exports = {
-  getAll: async () => {
-    try {
-      let companies = await CompanyModel.findAll();
+const getAll = async () => {
+  try {
+    let companies = await CompanyModel.findAll();
 
-      if (!companies || companies.length === 0) companies = [];
+    if (!companies || companies.length === 0) companies = [];
 
-      return companies;
-    } catch (error) {
-      console.error('Error fetching companies: ' + error.message);
-      throw error;
+    return companies;
+  } catch (error) {
+    console.error("Error fetching companies: " + error.message);
+    throw error;
+  }
+};
+
+const getById = async (id, options = {}) => CompanyModel.findByPk(id, options);
+
+const getByCnpj = async (cnpj, options = {}) =>
+  CompanyModel.findOne({ where: { cnpj }, ...options });
+
+const getByName = async (name, options = {}) =>
+  CompanyModel.findOne({ where: { name }, ...options });
+
+const create = async ({ name, description, cnpj }, options = {}) =>
+  CompanyModel.create({ name, description, cnpj }, options);
+
+const update = async (id, payload, options = {}) => {
+  const [updatedRowsCount] = await CompanyModel.update(payload, {
+    where: { id },
+    ...options,
+  });
+
+  return updatedRowsCount > 0;
+};
+
+const getByAdminUserId = async (userId, options = {}) => {
+  const companyAdmin = await CompanyAdminModel.findOne({
+    where: { user_id: userId },
+    include: [
+      {
+        model: CompanyModel,
+        as: "company",
+      },
+    ],
+    ...options,
+  });
+
+  return companyAdmin?.company || null;
+};
+
+const listAdmins = async (companyId, options = {}) =>
+  CompanyAdminModel.findAll({
+    where: { company_id: companyId },
+    attributes: ["id", "isPrimary"],
+    include: [
+      {
+        model: UserModel,
+        as: "user",
+        attributes: ["id", "name", "email", "phone", "cpf", "avatarUrl", "jobTitle", "userType"],
+      },
+    ],
+    order: [["isPrimary", "DESC"], ["id", "ASC"]],
+    ...options,
+  });
+
+const getAdminLink = async ({ companyId, userId }, options = {}) =>
+  CompanyAdminModel.findOne({
+    where: {
+      company_id: companyId,
+      user_id: userId,
+    },
+    ...options,
+  });
+
+const addAdminLink = async ({ companyId, userId, isPrimary = false }, options = {}) =>
+  CompanyAdminModel.create(
+    {
+      company_id: companyId,
+      user_id: userId,
+      isPrimary,
+    },
+    options
+  );
+
+const clearPrimaryAdmin = async (companyId, options = {}) =>
+  CompanyAdminModel.update(
+    { isPrimary: false },
+    {
+      where: { company_id: companyId },
+      ...options,
     }
-  },
+  );
 
-  getById: async (id, options = {}) => {
-    return CompanyModel.findByPk(id, options);
-  },
-
-  getByCnpj: async (cnpj, options = {}) => {
-    return CompanyModel.findOne({ where: { cnpj }, ...options });
-  },
-
-  getByName: async (name, options = {}) => {
-    return CompanyModel.findOne({ where: { name }, ...options });
-  },
-
-  create: async ({ name, description, cnpj }, options = {}) => {
-    return CompanyModel.create({ name, description, cnpj }, options);
-  },
-
-  update: async (id, payload, options = {}) => {
-    const [updatedRowsCount] = await CompanyModel.update(payload, {
-      where: { id },
-      ...options,
-    });
-
-    return updatedRowsCount > 0;
-  },
-
-  getByAdminUserId: async (userId, options = {}) => {
-    const companyAdmin = await CompanyAdminModel.findOne({
-      where: { user_id: userId },
-      include: [
-        {
-          model: CompanyModel,
-          as: 'company',
-        },
-      ],
-      ...options,
-    });
-
-    return companyAdmin?.company || null;
-  },
-
-  listAdmins: async (companyId, options = {}) => {
-    return CompanyAdminModel.findAll({
-      where: { company_id: companyId },
-      attributes: ['id', 'isPrimary'],
-      include: [
-        {
-          model: UserModel,
-          as: 'user',
-          attributes: ['id', 'name', 'email', 'phone', 'cpf', 'avatarUrl', 'jobTitle', 'userType'],
-        },
-      ],
-      order: [['isPrimary', 'DESC'], ['id', 'ASC']],
-      ...options,
-    });
-  },
-
-  getAdminLink: async ({ companyId, userId }, options = {}) => {
-    return CompanyAdminModel.findOne({
+const setPrimaryAdmin = async ({ companyId, userId }, options = {}) =>
+  CompanyAdminModel.update(
+    { isPrimary: true },
+    {
       where: {
         company_id: companyId,
         user_id: userId,
       },
       ...options,
-    });
-  },
+    }
+  );
 
-  addAdminLink: async ({ companyId, userId, isPrimary = false }, options = {}) => {
-    return CompanyAdminModel.create(
-      {
-        company_id: companyId,
-        user_id: userId,
-        isPrimary,
-      },
-      options
-    );
-  },
+const countAdmins = async (companyId, options = {}) =>
+  CompanyAdminModel.count({
+    where: { company_id: companyId },
+    ...options,
+  });
 
-  clearPrimaryAdmin: async (companyId, options = {}) => {
-    return CompanyAdminModel.update(
-      { isPrimary: false },
-      {
-        where: { company_id: companyId },
-        ...options,
-      }
-    );
-  },
+const removeAdminLink = async ({ companyId, userId }, options = {}) =>
+  CompanyAdminModel.destroy({
+    where: {
+      company_id: companyId,
+      user_id: userId,
+    },
+    ...options,
+  });
 
-  setPrimaryAdmin: async ({ companyId, userId }, options = {}) => {
-    return CompanyAdminModel.update(
-      { isPrimary: true },
-      {
-        where: {
-          company_id: companyId,
-          user_id: userId,
-        },
-        ...options,
-      }
-    );
-  },
+const listComplaintTitles = async (companyId, options = {}) =>
+  ComplaintTitleModel.findAll({
+    where: { company_id: companyId },
+    attributes: ["id", "title", "description"],
+    order: [["title", "ASC"], ["id", "ASC"]],
+    ...options,
+  });
 
-  countAdmins: async (companyId, options = {}) => {
-    return CompanyAdminModel.count({
-      where: { company_id: companyId },
-      ...options,
-    });
-  },
+const getComplaintTitleById = async (complaintTitleId, options = {}) => ComplaintTitleModel.findByPk(complaintTitleId, options);
 
-  removeAdminLink: async ({ companyId, userId }, options = {}) => {
-    return CompanyAdminModel.destroy({
-      where: {
-        company_id: companyId,
-        user_id: userId,
-      },
-      ...options,
-    });
-  },
+const createComplaintTitle = async (
+  { companyId, title, description = null },
+  options = {}
+) =>
+  ComplaintTitleModel.create(
+    {
+      company_id: companyId,
+      title,
+      description,
+    },
+    options
+  );
 
-  listComplaintTitles: async (companyId, options = {}) => {
-    return ComplaintTitleModel.findAll({
-      where: { company_id: companyId },
-      attributes: ['id', 'title', 'description'],
-      order: [['title', 'ASC'], ['id', 'ASC']],
-      ...options,
-    });
-  },
+const countTicketsByComplaintTitle = async ({ companyId, complaintTitleId }, options = {}) =>
+  TicketModel.count({
+    where: {
+      company_id: companyId,
+      complaintTitle_id: complaintTitleId,
+    },
+    ...options,
+  });
 
-  getComplaintTitleById: async (complaintTitleId, options = {}) => {
-    return ComplaintTitleModel.findByPk(complaintTitleId, options);
-  },
+const removeComplaintTitle = async ({ companyId, complaintTitleId }, options = {}) =>
+  ComplaintTitleModel.destroy({
+    where: {
+      id: complaintTitleId,
+      company_id: companyId,
+    },
+    ...options,
+  });
 
-  createComplaintTitle: async ({ companyId, title, description = null }, options = {}) => {
-    return ComplaintTitleModel.create(
-      {
-        company_id: companyId,
-        title,
-        description,
-      },
-      options
-    );
-  },
+export {
+  addAdminLink,
+  clearPrimaryAdmin,
+  countAdmins,
+  countTicketsByComplaintTitle,
+  create,
+  createComplaintTitle,
+  getAdminLink,
+  getAll,
+  getByAdminUserId,
+  getByCnpj,
+  getById,
+  getByName,
+  getComplaintTitleById,
+  listAdmins,
+  listComplaintTitles,
+  removeAdminLink,
+  removeComplaintTitle,
+  setPrimaryAdmin,
+  update,
+};
 
-  countTicketsByComplaintTitle: async ({ companyId, complaintTitleId }, options = {}) => {
-    return TicketModel.count({
-      where: {
-        company_id: companyId,
-        complaintTitle_id: complaintTitleId,
-      },
-      ...options,
-    });
-  },
-
-  removeComplaintTitle: async ({ companyId, complaintTitleId }, options = {}) => {
-    return ComplaintTitleModel.destroy({
-      where: {
-        id: complaintTitleId,
-        company_id: companyId,
-      },
-      ...options,
-    });
-  },
+export default {
+  getAll,
+  getById,
+  getByCnpj,
+  getByName,
+  create,
+  update,
+  getByAdminUserId,
+  listAdmins,
+  getAdminLink,
+  addAdminLink,
+  clearPrimaryAdmin,
+  setPrimaryAdmin,
+  countAdmins,
+  removeAdminLink,
+  listComplaintTitles,
+  getComplaintTitleById,
+  createComplaintTitle,
+  countTicketsByComplaintTitle,
+  removeComplaintTitle,
 };

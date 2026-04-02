@@ -14,4 +14,6 @@ const CHATBOT_AGENT = {
   ].join(" "),
 };
 
-module.exports = { CHATBOT_AGENT };
+export { CHATBOT_AGENT };
+
+export default { CHATBOT_AGENT };

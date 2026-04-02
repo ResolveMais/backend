@@ -1,44 +1,46 @@
-const { PasswordResetToken: PasswordResetTokenModel } = require("../models");
+import { PasswordResetToken as PasswordResetTokenModel } from "../models/index.js";
 
-module.exports = {
-  create: async ({ userId, tokenHash, expiresAt }, options = {}) => {
-    return PasswordResetTokenModel.create(
-      {
-        userId,
-        tokenHash,
-        expiresAt,
-        createdAt: new Date(),
-      },
-      options
-    );
-  },
+const create = async ({ userId, tokenHash, expiresAt }, options = {}) =>
+  PasswordResetTokenModel.create(
+    {
+      userId,
+      tokenHash,
+      expiresAt,
+      createdAt: new Date(),
+    },
+    options
+  );
 
-  markAllAsUsedByUserId: async (userId, options = {}) => {
-    return PasswordResetTokenModel.update(
-      { usedAt: new Date() },
-      {
-        where: {
-          userId,
-          usedAt: null,
-        },
-        ...options,
-      }
-    );
-  },
-
-  getActiveByTokenHash: async (tokenHash, options = {}) => {
-    return PasswordResetTokenModel.findOne({
+const markAllAsUsedByUserId = async (userId, options = {}) =>
+  PasswordResetTokenModel.update(
+    { usedAt: new Date() },
+    {
       where: {
-        tokenHash,
+        userId,
         usedAt: null,
       },
-      include: [
-        {
-          association: "user",
-        },
-      ],
       ...options,
-    });
-  },
+    }
+  );
 
+const getActiveByTokenHash = async (tokenHash, options = {}) =>
+  PasswordResetTokenModel.findOne({
+    where: {
+      tokenHash,
+      usedAt: null,
+    },
+    include: [
+      {
+        association: "user",
+      },
+    ],
+    ...options,
+  });
+
+export { create, getActiveByTokenHash, markAllAsUsedByUserId };
+
+export default {
+  create,
+  markAllAsUsedByUserId,
+  getActiveByTokenHash,
 };

@@ -1,16 +1,16 @@
-const bcrypt = require('bcrypt');
-const crypto = require('crypto');
-const { sequelize } = require('../models');
-const userRepository = require('../repositories/user.repository');
-const companyRepository = require('../repositories/company.repository');
-const passwordResetTokenRepository = require('../repositories/passwordResetToken.repository');
-const jwt = require('../utils/jwt');
-const { sendPasswordResetEmail } = require('../utils/mailer');
+import bcrypt from "bcrypt";
+import crypto from "node:crypto";
+import { sequelize } from "../models/index.js";
+import companyRepository from "../repositories/company.repository.js";
+import passwordResetTokenRepository from "../repositories/passwordResetToken.repository.js";
+import userRepository from "../repositories/user.repository.js";
+import jwt from "../utils/jwt.js";
+import { sendPasswordResetEmail } from "../utils/mailer.js";
 
 const USER_TYPES = Object.freeze({
-  CLIENTE: 'cliente',
-  FUNCIONARIO: 'funcionario',
-  EMPRESA: 'empresa',
+  CLIENTE: "cliente",
+  FUNCIONARIO: "funcionario",
+  EMPRESA: "empresa",
 });
 
 const USER_TYPE_ALIASES = Object.freeze({
@@ -22,20 +22,20 @@ const USER_TYPE_ALIASES = Object.freeze({
   company: USER_TYPES.EMPRESA,
 });
 
-const normalizeDigits = (value = '') => String(value).replace(/\D/g, '');
-const normalizeText = (value = '') => String(value).trim();
-const hashToken = (value = '') => crypto.createHash('sha256').update(String(value)).digest('hex');
+const normalizeDigits = (value = "") => String(value).replace(/\D/g, "");
+const normalizeText = (value = "") => String(value).trim();
+const hashToken = (value = "") => crypto.createHash("sha256").update(String(value)).digest("hex");
 const RESET_PASSWORD_EXPIRES_MINUTES = (() => {
   const parsed = Number(process.env.RESET_PASSWORD_EXPIRES_MINUTES || 30);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 30;
 })();
-const RESET_PASSWORD_SUCCESS_MESSAGE = 'Se uma conta com esse e-mail existir, um link para redefinir a senha foi enviado.';
+const RESET_PASSWORD_SUCCESS_MESSAGE = "Se uma conta com esse e-mail existir, um link para redefinir a senha foi enviado.";
 
-const normalizeUserType = (userType = '') => USER_TYPE_ALIASES[String(userType).trim().toLowerCase()] || null;
+const normalizeUserType = (userType = "") => USER_TYPE_ALIASES[String(userType).trim().toLowerCase()] || null;
 
 const sanitizeUserPayload = (user) => {
   if (!user) return null;
-  const plainUser = typeof user.get === 'function' ? user.get({ plain: true }) : { ...user };
+  const plainUser = typeof user.get === "function" ? user.get({ plain: true }) : { ...user };
   delete plainUser.password;
   return plainUser;
 };
@@ -54,14 +54,14 @@ const createStandardUser = async ({
   const documentDigits = normalizeDigits(cpf);
 
   if (documentDigits.length !== 11) {
-    return { error: { status: 400, message: 'CPF must have 11 digits' } };
+    return { error: { status: 400, message: "CPF must have 11 digits" } };
   }
 
   const existingEmail = await userRepository.getByEmail(email);
-  if (existingEmail) return { error: { status: 400, message: 'User already exists' } };
+  if (existingEmail) return { error: { status: 400, message: "User already exists" } };
 
   const existingCpf = await userRepository.getByCpf(documentDigits);
-  if (existingCpf) return { error: { status: 400, message: 'CPF already registered' } };
+  if (existingCpf) return { error: { status: 400, message: "CPF already registered" } };
 
   const hashedPassword = await bcrypt.hash(password, 10);
 
@@ -83,37 +83,37 @@ const createStandardUser = async ({
   return { user: createdUser };
 };
 
-exports.login = async ({ email, password }) => {
+const login = async ({ email, password }) => {
   try {
     let user = await userRepository.getByEmail(email, true);
 
-    if (!user) return { status: 400, message: 'Invalid credentials' };
+    if (!user) return { status: 400, message: "Invalid credentials" };
 
     user = user.get({ plain: true });
 
     const isPasswordValid = await bcrypt.compare(password, user.password);
-    if (!isPasswordValid) return { status: 400, message: 'Invalid credentials' };
+    if (!isPasswordValid) return { status: 400, message: "Invalid credentials" };
 
     const token = jwt.sign(user);
     const sanitizedUser = sanitizeUserPayload(user);
 
     return {
       status: 200,
-      message: 'Login successful',
+      message: "Login successful",
       user: sanitizedUser,
       token,
     };
   } catch (error) {
-    console.error('Error during login: ' + error);
-    return { status: 500, message: 'Login failed' };
+    console.error("Error during login: " + error);
+    return { status: 500, message: "Login failed" };
   }
 };
 
-exports.forgotPassword = async ({ email }) => {
+const forgotPassword = async ({ email }) => {
   try {
     const normalizedEmail = normalizeText(email);
     if (!normalizedEmail) {
-      return { status: 400, message: 'E-mail is required' };
+      return { status: 400, message: "E-mail is required" };
     }
 
     const user = await userRepository.getByEmail(normalizedEmail);
@@ -121,7 +121,7 @@ exports.forgotPassword = async ({ email }) => {
       return { status: 200, message: RESET_PASSWORD_SUCCESS_MESSAGE };
     }
 
-    const rawToken = crypto.randomBytes(32).toString('hex');
+    const rawToken = crypto.randomBytes(32).toString("hex");
     const tokenHash = hashToken(rawToken);
     const expiresAt = new Date(Date.now() + RESET_PASSWORD_EXPIRES_MINUTES * 60 * 1000);
 
@@ -137,7 +137,7 @@ exports.forgotPassword = async ({ email }) => {
       );
     });
 
-    const appUrl = normalizeText(process.env.APP_URL || 'http://localhost:5173');
+    const appUrl = normalizeText(process.env.APP_URL || "http://localhost:5173");
     const resetUrl = `${appUrl}/reset-password?token=${encodeURIComponent(rawToken)}`;
 
     try {
@@ -148,38 +148,38 @@ exports.forgotPassword = async ({ email }) => {
         expiresInMinutes: RESET_PASSWORD_EXPIRES_MINUTES,
       });
     } catch (mailError) {
-      console.error('Error sending password reset e-mail: ' + mailError.message);
+      console.error("Error sending password reset e-mail: " + mailError.message);
     }
 
     return { status: 200, message: RESET_PASSWORD_SUCCESS_MESSAGE };
   } catch (error) {
-    console.error('Error during forgotPassword: ' + error.message);
-    return { status: 500, message: 'Failed to process password reset request' };
+    console.error("Error during forgotPassword: " + error.message);
+    return { status: 500, message: "Failed to process password reset request" };
   }
 };
 
-exports.resetPassword = async ({ token, newPassword }) => {
+const resetPassword = async ({ token, newPassword }) => {
   try {
     const normalizedToken = normalizeText(token);
-    const normalizedPassword = String(newPassword || '');
+    const normalizedPassword = String(newPassword || "");
 
     if (!normalizedToken || !normalizedPassword) {
-      return { status: 400, message: 'Token and new password are required' };
+      return { status: 400, message: "Token and new password are required" };
     }
 
     if (normalizedPassword.length < 6) {
-      return { status: 400, message: 'Password must have at least 6 characters' };
+      return { status: 400, message: "Password must have at least 6 characters" };
     }
 
     const tokenHash = hashToken(normalizedToken);
     const tokenRecord = await passwordResetTokenRepository.getActiveByTokenHash(tokenHash);
 
     if (!tokenRecord) {
-      return { status: 400, message: 'O token está inválido ou expirado' };
+      return { status: 400, message: "O token está inválido ou expirado" };
     }
 
     if (new Date(tokenRecord.expiresAt).getTime() < Date.now()) {
-      return { status: 400, message: 'O token está inválido ou expirado' };
+      return { status: 400, message: "O token está inválido ou expirado" };
     }
 
     const hashedPassword = await bcrypt.hash(normalizedPassword, 10);
@@ -189,39 +189,39 @@ exports.resetPassword = async ({ token, newPassword }) => {
       await passwordResetTokenRepository.markAllAsUsedByUserId(tokenRecord.user.id, { transaction });
     });
 
-    return { status: 200, message: 'Senha redefinida com sucesso' };
+    return { status: 200, message: "Senha redefinida com sucesso" };
   } catch (error) {
-    console.error('Error during resetPassword: ' + error.message);
-    return { status: 500, message: 'Erro ao redefinir senha' };
+    console.error("Error during resetPassword: " + error.message);
+    return { status: 500, message: "Erro ao redefinir senha" };
   }
 };
 
-exports.validateResetToken = async ({ token }) => {
+const validateResetToken = async ({ token }) => {
   try {
     const normalizedToken = normalizeText(token);
     if (!normalizedToken) {
-      return { status: 400, message: 'Token is required' };
+      return { status: 400, message: "Token is required" };
     }
 
     const tokenHash = hashToken(normalizedToken);
     const tokenRecord = await passwordResetTokenRepository.getActiveByTokenHash(tokenHash);
 
     if (!tokenRecord) {
-      return { status: 400, message: 'Invalid or expired reset token' };
+      return { status: 400, message: "Invalid or expired reset token" };
     }
 
     if (new Date(tokenRecord.expiresAt).getTime() < Date.now()) {
-      return { status: 400, message: 'Invalid or expired reset token' };
+      return { status: 400, message: "Invalid or expired reset token" };
     }
 
-    return { status: 200, message: 'Valid reset token' };
+    return { status: 200, message: "Valid reset token" };
   } catch (error) {
-    console.error('Error during validateResetToken: ' + error.message);
-    return { status: 500, message: 'Failed to validate reset token' };
+    console.error("Error during validateResetToken: " + error.message);
+    return { status: 500, message: "Failed to validate reset token" };
   }
 };
 
-exports.register = async ({
+const register = async ({
   name,
   email,
   password,
@@ -238,19 +238,22 @@ exports.register = async ({
     const normalizedUserType = normalizeUserType(userType || USER_TYPES.CLIENTE);
 
     if (!normalizedUserType) {
-      return { status: 400, message: 'Invalid userType' };
+      return { status: 400, message: "Invalid userType" };
     }
 
     if (normalizedUserType === USER_TYPES.FUNCIONARIO) {
       return {
         status: 403,
-        message: 'Employee registration is only allowed by company admins',
+        message: "Employee registration is only allowed by company admins",
       };
     }
 
     if (normalizedUserType !== USER_TYPES.EMPRESA) {
       if (!name || !email || !password || !cpf) {
-        return { status: 400, message: 'Name, email, password and CPF are required' };
+        return {
+          status: 400,
+          message: "Name, email, password and CPF are required",
+        };
       }
 
       const result = await createStandardUser({
@@ -270,14 +273,14 @@ exports.register = async ({
 
       return {
         status: 201,
-        message: 'User registered successfully',
+        message: "User registered successfully",
         user: sanitizedUser,
         token,
       };
     }
 
-    const normalizedCompanyName = String(companyName || '').trim();
-    const normalizedCompanyDescription = String(companyDescription || '').trim();
+    const normalizedCompanyName = String(companyName || "").trim();
+    const normalizedCompanyDescription = String(companyDescription || "").trim();
     const normalizedCompanyCnpj = normalizeDigits(companyCnpj);
 
     const normalizedAdminUser = adminUser || {
@@ -289,30 +292,36 @@ exports.register = async ({
       birthDate,
     };
 
-    const adminName = String(normalizedAdminUser?.name || '').trim();
-    const adminEmail = String(normalizedAdminUser?.email || '').trim();
-    const adminPassword = String(normalizedAdminUser?.password || '');
+    const adminName = String(normalizedAdminUser?.name || "").trim();
+    const adminEmail = String(normalizedAdminUser?.email || "").trim();
+    const adminPassword = String(normalizedAdminUser?.password || "");
     const adminPhone = normalizedAdminUser?.phone || null;
     const adminBirthDate = normalizedAdminUser?.birthDate || null;
     const adminCpfDigits = normalizeDigits(normalizedAdminUser?.cpf);
 
-    if (!normalizedCompanyName || !normalizedCompanyDescription || normalizedCompanyCnpj.length !== 14) {
+    if (
+      !normalizedCompanyName ||
+      !normalizedCompanyDescription ||
+      normalizedCompanyCnpj.length !== 14
+    ) {
       return {
         status: 400,
-        message: 'Company name, company description and company CNPJ are required',
+        message: "Company name, company description and company CNPJ are required",
       };
     }
 
     if (!adminName || !adminEmail || !adminPassword || adminCpfDigits.length !== 11) {
       return {
         status: 400,
-        message: 'Admin name, email, password and CPF are required',
+        message: "Admin name, email, password and CPF are required",
       };
     }
 
-    const existingCompanyCnpj = await companyRepository.getByCnpj(normalizedCompanyCnpj);
+    const existingCompanyCnpj = await companyRepository.getByCnpj(
+      normalizedCompanyCnpj
+    );
     if (existingCompanyCnpj) {
-      return { status: 400, message: 'Company CNPJ already registered' };
+      return { status: 400, message: "Company CNPJ already registered" };
     }
 
     const [existingAdminEmail, existingAdminCpf] = await Promise.all([
@@ -320,8 +329,8 @@ exports.register = async ({
       userRepository.getByCpf(adminCpfDigits),
     ]);
 
-    if (existingAdminEmail) return { status: 400, message: 'Admin e-mail already registered' };
-    if (existingAdminCpf) return { status: 400, message: 'Admin CPF already registered' };
+    if (existingAdminEmail) return { status: 400, message: "Admin e-mail already registered" };
+    if (existingAdminCpf) return { status: 400, message: "Admin CPF already registered" };
 
     const transactionResult = await sequelize.transaction(async (transaction) => {
       const createdCompany = await companyRepository.create(
@@ -369,7 +378,7 @@ exports.register = async ({
 
     return {
       status: 201,
-      message: 'Company and admin user registered successfully',
+      message: "Company and admin user registered successfully",
       user: sanitizedUser,
       company: {
         id: transactionResult.company.id,
@@ -380,7 +389,17 @@ exports.register = async ({
       token,
     };
   } catch (error) {
-    console.error('Error during registration: ' + error.message);
-    return { status: 500, message: 'Registration failed' };
+    console.error("Error during registration: " + error.message);
+    return { status: 500, message: "Registration failed" };
   }
+};
+
+export { forgotPassword, login, register, resetPassword, validateResetToken };
+
+export default {
+  login,
+  forgotPassword,
+  resetPassword,
+  validateResetToken,
+  register,
 };

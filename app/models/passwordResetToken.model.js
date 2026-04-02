@@ -1,4 +1,4 @@
-module.exports = (sequelize, Sequelize) => {
+const initPasswordResetTokenModel = (sequelize, Sequelize) => {
   const PasswordResetToken = sequelize.define(
     "PasswordResetToken",
     {
@@ -49,3 +49,5 @@ module.exports = (sequelize, Sequelize) => {
 
   return PasswordResetToken;
 };
+
+export default initPasswordResetTokenModel;

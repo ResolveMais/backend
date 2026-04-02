@@ -1,11 +1,11 @@
-const chatbotService = require("../services/chatbot.service");
+import chatbotService from "../services/chatbot.service.js";
 
 const sendSseEvent = (res, eventName, payload) => {
   res.write(`event: ${eventName}\n`);
   res.write(`data: ${JSON.stringify(payload)}\n\n`);
 };
 
-exports.getConversation = async (req, res) => {
+const getConversation = async (req, res) => {
   const response = await chatbotService.getConversation({
     userId: req.user?.id,
     ticketId: req.query?.ticketId || null,
@@ -14,7 +14,7 @@ exports.getConversation = async (req, res) => {
   return res.status(response.status).json(response);
 };
 
-exports.clearConversation = async (req, res) => {
+const clearConversation = async (req, res) => {
   const response = await chatbotService.clearConversation({
     userId: req.user?.id,
     conversationId: req.body?.conversationId || null,
@@ -24,19 +24,15 @@ exports.clearConversation = async (req, res) => {
   return res.status(response.status).json(response);
 };
 
-exports.streamMessage = async (req, res) => {
+const streamMessage = async (req, res) => {
   const { message, conversationId = null, ticketId = null } = req.body || {};
 
   if (!message || !String(message).trim()) {
-    return res
-      .status(400)
-      .json({ status: 400, message: "Mensagem obrigatoria." });
+    return res.status(400).json({ status: 400, message: "Mensagem obrigatoria." });
   }
 
   if (!req.user?.id) {
-    return res
-      .status(401)
-      .json({ status: 401, message: "Usuario nao autenticado." });
+    return res.status(401).json({ status: 401, message: "Usuario nao autenticado." });
   }
 
   res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
@@ -68,6 +64,7 @@ exports.streamMessage = async (req, res) => {
     return res.end();
   } catch (error) {
     console.error(error);
+
     if (abortController.signal.aborted) {
       return res.end();
     }
@@ -82,4 +79,12 @@ exports.streamMessage = async (req, res) => {
 
     return res.end();
   }
+};
+
+export { clearConversation, getConversation, streamMessage };
+
+export default {
+  getConversation,
+  clearConversation,
+  streamMessage,
 };

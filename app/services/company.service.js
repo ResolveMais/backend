@@ -1,16 +1,16 @@
-const bcrypt = require('bcrypt');
-const { sequelize } = require('../models');
-const companyRepository = require('../repositories/company.repository');
-const userRepository = require('../repositories/user.repository');
+import bcrypt from "bcrypt";
+import { sequelize } from "../models/index.js";
+import companyRepository from "../repositories/company.repository.js";
+import userRepository from "../repositories/user.repository.js";
 
 const USER_TYPES = Object.freeze({
-  CLIENTE: 'cliente',
-  FUNCIONARIO: 'funcionario',
-  EMPRESA: 'empresa',
+  CLIENTE: "cliente",
+  FUNCIONARIO: "funcionario",
+  EMPRESA: "empresa",
 });
 
-const normalizeDigits = (value = '') => String(value).replace(/\D/g, '');
-const normalizeText = (value = '') => String(value).trim();
+const normalizeDigits = (value = "") => String(value).replace(/\D/g, "");
+const normalizeText = (value = "") => String(value).trim();
 
 const formatCompanySnapshot = (company) => ({
   id: company.id,
@@ -47,7 +47,7 @@ const formatEmployeeResponse = (user) => ({
 const formatComplaintTitleResponse = (complaintTitle) => ({
   id: complaintTitle.id,
   title: complaintTitle.title,
-  description: complaintTitle.description || '',
+  description: complaintTitle.description || "",
 });
 
 const getCompanyFromAdminUser = async (userId) => {
@@ -73,18 +73,18 @@ const getCompanyDataForAdmin = async (authUserId) => {
   const company = await getCompanyFromAdminUser(authUserId);
 
   if (!company) {
-    return { error: { status: 403, message: 'User is not an admin of any company' } };
+    return { error: { status: 403, message: "User is not an admin of any company" } };
   }
 
   return { company };
 };
 
-exports.getAllCompanies = async () => {
+const getAllCompanies = async () => {
   const companies = await companyRepository.getAll();
   return { status: 200, result: companies };
 };
 
-exports.getMyCompanyAdmins = async (authUserId) => {
+const getMyCompanyAdmins = async (authUserId) => {
   const context = await getCompanyDataForAdmin(authUserId);
   if (context.error) return context.error;
 
@@ -97,7 +97,7 @@ exports.getMyCompanyAdmins = async (authUserId) => {
   };
 };
 
-exports.getMyCompanyEmployees = async (authUserId) => {
+const getMyCompanyEmployees = async (authUserId) => {
   const context = await getCompanyDataForAdmin(authUserId);
   if (context.error) return context.error;
 
@@ -110,7 +110,7 @@ exports.getMyCompanyEmployees = async (authUserId) => {
   };
 };
 
-exports.getMyCompanyComplaintTitles = async (authUserId) => {
+const getMyCompanyComplaintTitles = async (authUserId) => {
   const context = await getCompanyDataForAdmin(authUserId);
   if (context.error) return context.error;
 
@@ -125,12 +125,12 @@ exports.getMyCompanyComplaintTitles = async (authUserId) => {
   };
 };
 
-exports.updateMyCompanyProfile = async (authUserId, payload) => {
+const updateMyCompanyProfile = async (authUserId, payload) => {
   const context = await getCompanyDataForAdmin(authUserId);
   if (context.error) return context.error;
 
   if (payload?.cnpj !== undefined) {
-    return { status: 400, message: 'CNPJ cannot be updated after company registration' };
+    return { status: 400, message: "CNPJ cannot be updated after company registration" };
   }
 
   const updatePayload = {};
@@ -138,12 +138,12 @@ exports.updateMyCompanyProfile = async (authUserId, payload) => {
   if (payload?.name !== undefined) {
     const normalizedName = normalizeText(payload.name);
     if (!normalizedName) {
-      return { status: 400, message: 'Company name cannot be empty' };
+      return { status: 400, message: "Company name cannot be empty" };
     }
 
     const duplicatedName = await companyRepository.getByName(normalizedName);
     if (duplicatedName && Number(duplicatedName.id) !== Number(context.company.id)) {
-      return { status: 400, message: 'Company name already in use' };
+      return { status: 400, message: "Company name already in use" };
     }
 
     updatePayload.name = normalizedName;
@@ -154,7 +154,7 @@ exports.updateMyCompanyProfile = async (authUserId, payload) => {
   }
 
   if (Object.keys(updatePayload).length === 0) {
-    return { status: 400, message: 'No company profile fields provided for update' };
+    return { status: 400, message: "No company profile fields provided for update" };
   }
 
   await companyRepository.update(context.company.id, updatePayload);
@@ -163,28 +163,28 @@ exports.updateMyCompanyProfile = async (authUserId, payload) => {
 
   return {
     status: 200,
-    message: 'Company profile updated successfully',
+    message: "Company profile updated successfully",
     company: formatCompanySnapshot(company),
   };
 };
 
-exports.addMyCompanyComplaintTitle = async (authUserId, payload) => {
+const addMyCompanyComplaintTitle = async (authUserId, payload) => {
   const context = await getCompanyDataForAdmin(authUserId);
   if (context.error) return context.error;
 
-  const title = normalizeText(payload?.title || '');
-  const description = normalizeText(payload?.description || '');
+  const title = normalizeText(payload?.title || "");
+  const description = normalizeText(payload?.description || "");
 
   if (!title) {
-    return { status: 400, message: 'O assunto da reclamacao nao pode ficar vazio' };
+    return { status: 400, message: "O assunto da reclamacao nao pode ficar vazio" };
   }
 
   if (title.length > 100) {
-    return { status: 400, message: 'O assunto da reclamacao deve ter no maximo 100 caracteres' };
+    return { status: 400, message: "O assunto da reclamacao deve ter no maximo 100 caracteres" };
   }
 
   if (description.length > 255) {
-    return { status: 400, message: 'A descricao do assunto deve ter no maximo 255 caracteres' };
+    return { status: 400, message: "A descricao do assunto deve ter no maximo 255 caracteres" };
   }
 
   const currentComplaintTitles = await companyRepository.listComplaintTitles(context.company.id);
@@ -193,7 +193,7 @@ exports.addMyCompanyComplaintTitle = async (authUserId, payload) => {
   );
 
   if (duplicatedComplaintTitle) {
-    return { status: 400, message: 'Ja existe um assunto com esse nome para a empresa' };
+    return { status: 400, message: "Ja existe um assunto com esse nome para a empresa" };
   }
 
   await companyRepository.createComplaintTitle({
@@ -206,7 +206,7 @@ exports.addMyCompanyComplaintTitle = async (authUserId, payload) => {
 
   return {
     status: 201,
-    message: 'Assunto cadastrado com sucesso',
+    message: "Assunto cadastrado com sucesso",
     company: formatCompanySnapshot(context.company),
     complaintTitles: complaintTitles.map((complaintTitle) =>
       formatComplaintTitleResponse(complaintTitle.get({ plain: true }))
@@ -214,20 +214,20 @@ exports.addMyCompanyComplaintTitle = async (authUserId, payload) => {
   };
 };
 
-exports.removeMyCompanyComplaintTitle = async (authUserId, complaintTitleId) => {
+const removeMyCompanyComplaintTitle = async (authUserId, complaintTitleId) => {
   const context = await getCompanyDataForAdmin(authUserId);
   if (context.error) return context.error;
 
   const parsedComplaintTitleId = Number(complaintTitleId);
 
   if (!Number.isInteger(parsedComplaintTitleId) || parsedComplaintTitleId <= 0) {
-    return { status: 400, message: 'Assunto de reclamacao invalido' };
+    return { status: 400, message: "Assunto de reclamacao invalido" };
   }
 
   const complaintTitle = await companyRepository.getComplaintTitleById(parsedComplaintTitleId);
 
   if (!complaintTitle || Number(complaintTitle.company_id) !== Number(context.company.id)) {
-    return { status: 404, message: 'Assunto de reclamacao nao encontrado para a empresa' };
+    return { status: 404, message: "Assunto de reclamacao nao encontrado para a empresa" };
   }
 
   const linkedTicketsCount = await companyRepository.countTicketsByComplaintTitle({
@@ -238,7 +238,7 @@ exports.removeMyCompanyComplaintTitle = async (authUserId, complaintTitleId) => 
   if (linkedTicketsCount > 0) {
     return {
       status: 400,
-      message: 'Nao e possivel remover um assunto ja utilizado em tickets',
+      message: "Nao e possivel remover um assunto ja utilizado em tickets",
     };
   }
 
@@ -251,7 +251,7 @@ exports.removeMyCompanyComplaintTitle = async (authUserId, complaintTitleId) => 
 
   return {
     status: 200,
-    message: 'Assunto removido com sucesso',
+    message: "Assunto removido com sucesso",
     company: formatCompanySnapshot(context.company),
     complaintTitles: complaintTitles.map((complaintTitle) =>
       formatComplaintTitleResponse(complaintTitle.get({ plain: true }))
@@ -259,13 +259,13 @@ exports.removeMyCompanyComplaintTitle = async (authUserId, complaintTitleId) => 
   };
 };
 
-exports.addMyCompanyEmployee = async (authUserId, payload) => {
+const addMyCompanyEmployee = async (authUserId, payload) => {
   const context = await getCompanyDataForAdmin(authUserId);
   if (context.error) return context.error;
 
-  const name = normalizeText(payload?.name || '');
-  const email = normalizeText(payload?.email || '');
-  const password = normalizeText(payload?.password || '');
+  const name = normalizeText(payload?.name || "");
+  const email = normalizeText(payload?.email || "");
+  const password = normalizeText(payload?.password || "");
   const phone = payload?.phone ? normalizeText(payload.phone) : null;
   const jobTitle = payload?.jobTitle ? normalizeText(payload.jobTitle) : null;
   const cpfDigits = normalizeDigits(payload?.cpf);
@@ -273,7 +273,7 @@ exports.addMyCompanyEmployee = async (authUserId, payload) => {
   if (!name || !email || !password || cpfDigits.length !== 11) {
     return {
       status: 400,
-      message: 'Name, e-mail, password and CPF are required to create an employee',
+      message: "Name, e-mail, password and CPF are required to create an employee",
     };
   }
 
@@ -282,8 +282,8 @@ exports.addMyCompanyEmployee = async (authUserId, payload) => {
     userRepository.getByCpf(cpfDigits),
   ]);
 
-  if (existingEmail) return { status: 400, message: 'E-mail already registered' };
-  if (existingCpf) return { status: 400, message: 'CPF already registered' };
+  if (existingEmail) return { status: 400, message: "E-mail already registered" };
+  if (existingCpf) return { status: 400, message: "CPF already registered" };
 
   const hashedPassword = await bcrypt.hash(password, 10);
 
@@ -304,42 +304,42 @@ exports.addMyCompanyEmployee = async (authUserId, payload) => {
 
   return {
     status: 201,
-    message: 'Employee created successfully',
+    message: "Employee created successfully",
     company: formatCompanySnapshot(context.company),
     employees,
   };
 };
 
-exports.updateMyCompanyEmployee = async (authUserId, employeeUserId, payload) => {
+const updateMyCompanyEmployee = async (authUserId, employeeUserId, payload) => {
   const context = await getCompanyDataForAdmin(authUserId);
   if (context.error) return context.error;
 
   if (payload?.cpf !== undefined || payload?.cnpj !== undefined) {
-    return { status: 400, message: 'CPF/CNPJ cannot be updated after registration' };
+    return { status: 400, message: "CPF/CNPJ cannot be updated after registration" };
   }
 
   const employee = await userRepository.getById(Number(employeeUserId));
-  if (!employee) return { status: 404, message: 'Employee not found' };
+  if (!employee) return { status: 404, message: "Employee not found" };
 
   if (employee.userType !== USER_TYPES.FUNCIONARIO || employee.companyId !== context.company.id) {
-    return { status: 400, message: 'User is not an employee of this company' };
+    return { status: 400, message: "User is not an employee of this company" };
   }
 
   const updatePayload = {};
 
   if (payload?.name !== undefined) {
     const normalizedName = normalizeText(payload.name);
-    if (!normalizedName) return { status: 400, message: 'Name cannot be empty' };
+    if (!normalizedName) return { status: 400, message: "Name cannot be empty" };
     updatePayload.name = normalizedName;
   }
 
   if (payload?.email !== undefined) {
     const normalizedEmail = normalizeText(payload.email);
-    if (!normalizedEmail) return { status: 400, message: 'E-mail cannot be empty' };
+    if (!normalizedEmail) return { status: 400, message: "E-mail cannot be empty" };
 
     const existingEmail = await userRepository.getByEmail(normalizedEmail);
     if (existingEmail && Number(existingEmail.id) !== Number(employee.id)) {
-      return { status: 400, message: 'E-mail already registered' };
+      return { status: 400, message: "E-mail already registered" };
     }
 
     updatePayload.email = normalizedEmail;
@@ -354,7 +354,7 @@ exports.updateMyCompanyEmployee = async (authUserId, employeeUserId, payload) =>
   }
 
   if (Object.keys(updatePayload).length === 0) {
-    return { status: 400, message: 'No employee fields provided for update' };
+    return { status: 400, message: "No employee fields provided for update" };
   }
 
   await userRepository.update(employee.id, updatePayload);
@@ -363,21 +363,21 @@ exports.updateMyCompanyEmployee = async (authUserId, employeeUserId, payload) =>
 
   return {
     status: 200,
-    message: 'Employee updated successfully',
+    message: "Employee updated successfully",
     company: formatCompanySnapshot(context.company),
     employees,
   };
 };
 
-exports.removeMyCompanyEmployee = async (authUserId, employeeUserId) => {
+const removeMyCompanyEmployee = async (authUserId, employeeUserId) => {
   const context = await getCompanyDataForAdmin(authUserId);
   if (context.error) return context.error;
 
   const employee = await userRepository.getById(Number(employeeUserId));
-  if (!employee) return { status: 404, message: 'Employee not found' };
+  if (!employee) return { status: 404, message: "Employee not found" };
 
   if (employee.userType !== USER_TYPES.FUNCIONARIO || employee.companyId !== context.company.id) {
-    return { status: 400, message: 'User is not an employee of this company' };
+    return { status: 400, message: "User is not an employee of this company" };
   }
 
   await userRepository.update(employee.id, { companyId: null });
@@ -386,41 +386,41 @@ exports.removeMyCompanyEmployee = async (authUserId, employeeUserId) => {
 
   return {
     status: 200,
-    message: 'Employee removed from company',
+    message: "Employee removed from company",
     company: formatCompanySnapshot(context.company),
     employees,
   };
 };
 
-exports.addMyCompanyAdmin = async (authUserId, payload) => {
+const addMyCompanyAdmin = async (authUserId, payload) => {
   const context = await getCompanyDataForAdmin(authUserId);
   if (context.error) return context.error;
 
   const makePrimary = Boolean(payload?.makePrimary);
-  const existingEmail = String(payload?.email || '').trim();
+  const existingEmail = String(payload?.email || "").trim();
   const shouldCreateUser = Boolean(payload?.name && payload?.password && payload?.cpf);
 
   if (!existingEmail) {
-    return { status: 400, message: 'E-mail is required to associate an admin' };
+    return { status: 400, message: "E-mail is required to associate an admin" };
   }
 
   let targetUser = await userRepository.getByEmail(existingEmail);
   let newUserPayload = null;
 
   if (!targetUser && !shouldCreateUser) {
-    return { status: 404, message: 'User not found for this e-mail' };
+    return { status: 404, message: "User not found for this e-mail" };
   }
 
   if (!targetUser && shouldCreateUser) {
     const cpfDigits = normalizeDigits(payload?.cpf);
 
     if (cpfDigits.length !== 11) {
-      return { status: 400, message: 'CPF must have 11 digits' };
+      return { status: 400, message: "CPF must have 11 digits" };
     }
 
     const existingCpf = await userRepository.getByCpf(cpfDigits);
     if (existingCpf) {
-      return { status: 400, message: 'CPF already registered' };
+      return { status: 400, message: "CPF already registered" };
     }
 
     const hashedPassword = await bcrypt.hash(String(payload.password), 10);
@@ -440,20 +440,20 @@ exports.addMyCompanyAdmin = async (authUserId, payload) => {
   }
 
   if (!targetUser && !newUserPayload) {
-    return { status: 500, message: 'Failed to create/find admin user' };
+    return { status: 500, message: "Failed to create/find admin user" };
   }
 
   if (targetUser && ![USER_TYPES.EMPRESA, USER_TYPES.FUNCIONARIO].includes(targetUser.userType)) {
     return {
       status: 400,
-      message: 'Only users with type empresa or funcionario can be admins',
+      message: "Only users with type empresa or funcionario can be admins",
     };
   }
 
   if (targetUser?.companyId && targetUser.companyId !== context.company.id) {
     return {
       status: 400,
-      message: 'User is already associated with another company',
+      message: "User is already associated with another company",
     };
   }
 
@@ -476,7 +476,7 @@ exports.addMyCompanyAdmin = async (authUserId, payload) => {
       );
 
       if (existingAdminLink) {
-        throw new Error('ADMIN_ALREADY_LINKED');
+        throw new Error("ADMIN_ALREADY_LINKED");
       }
 
       if (makePrimary) {
@@ -493,8 +493,8 @@ exports.addMyCompanyAdmin = async (authUserId, payload) => {
       );
     });
   } catch (error) {
-    if (error.message === 'ADMIN_ALREADY_LINKED') {
-      return { status: 400, message: 'User is already an admin of this company' };
+    if (error.message === "ADMIN_ALREADY_LINKED") {
+      return { status: 400, message: "User is already an admin of this company" };
     }
     throw error;
   }
@@ -508,7 +508,7 @@ exports.addMyCompanyAdmin = async (authUserId, payload) => {
   };
 };
 
-exports.setMyCompanyPrimaryAdmin = async (authUserId, adminUserId) => {
+const setMyCompanyPrimaryAdmin = async (authUserId, adminUserId) => {
   const context = await getCompanyDataForAdmin(authUserId);
   if (context.error) return context.error;
 
@@ -518,7 +518,7 @@ exports.setMyCompanyPrimaryAdmin = async (authUserId, adminUserId) => {
   });
 
   if (!targetAdmin) {
-    return { status: 404, message: 'Admin user not linked to this company' };
+    return { status: 404, message: "Admin user not linked to this company" };
   }
 
   await sequelize.transaction(async (transaction) => {
@@ -541,7 +541,7 @@ exports.setMyCompanyPrimaryAdmin = async (authUserId, adminUserId) => {
   };
 };
 
-exports.removeMyCompanyAdmin = async (authUserId, adminUserId) => {
+const removeMyCompanyAdmin = async (authUserId, adminUserId) => {
   const context = await getCompanyDataForAdmin(authUserId);
   if (context.error) return context.error;
 
@@ -551,12 +551,12 @@ exports.removeMyCompanyAdmin = async (authUserId, adminUserId) => {
   });
 
   if (!targetAdmin) {
-    return { status: 404, message: 'Admin user not linked to this company' };
+    return { status: 404, message: "Admin user not linked to this company" };
   }
 
   const adminsCount = await companyRepository.countAdmins(context.company.id);
   if (adminsCount <= 1) {
-    return { status: 400, message: 'A company must have at least one admin' };
+    return { status: 400, message: "A company must have at least one admin" };
   }
 
   await sequelize.transaction(async (transaction) => {
@@ -591,4 +591,36 @@ exports.removeMyCompanyAdmin = async (authUserId, adminUserId) => {
     company: formatCompanySnapshot(context.company),
     admins,
   };
+};
+
+export {
+  addMyCompanyAdmin,
+  addMyCompanyComplaintTitle,
+  addMyCompanyEmployee,
+  getAllCompanies,
+  getMyCompanyAdmins,
+  getMyCompanyComplaintTitles,
+  getMyCompanyEmployees,
+  removeMyCompanyAdmin,
+  removeMyCompanyComplaintTitle,
+  removeMyCompanyEmployee,
+  setMyCompanyPrimaryAdmin,
+  updateMyCompanyEmployee,
+  updateMyCompanyProfile,
+};
+
+export default {
+  getAllCompanies,
+  getMyCompanyAdmins,
+  getMyCompanyEmployees,
+  getMyCompanyComplaintTitles,
+  updateMyCompanyProfile,
+  addMyCompanyComplaintTitle,
+  removeMyCompanyComplaintTitle,
+  addMyCompanyEmployee,
+  updateMyCompanyEmployee,
+  removeMyCompanyEmployee,
+  addMyCompanyAdmin,
+  setMyCompanyPrimaryAdmin,
+  removeMyCompanyAdmin,
 };

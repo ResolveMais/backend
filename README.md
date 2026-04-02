@@ -20,7 +20,6 @@ API REST do projeto `Resolve Mais`, construída com `Node.js`, `Express` e `Sequ
 - `bcrypt`
 - `jsonwebtoken`
 - `dotenv`
-- `sequelize-cli`
 
 ## Estrutura
 
@@ -30,13 +29,11 @@ backend/
 |   |-- config/
 |   |-- controllers/
 |   |-- middlewares/
-|   |-- migrations/
 |   |-- models/
 |   |-- repositories/
 |   |-- routes/
 |   |-- services/
 |   `-- utils/
-|-- .sequelizerc
 |-- .env.example
 |-- index.js
 |-- package.json
@@ -75,58 +72,9 @@ JWT_ALGORITHM=HS256
 # SERVER
 PORT=3001
 
-# Opcional: apenas se quiser sync automatico ao subir
+# Opcional: apenas se quiser sync automatico ao subir em desenvolvimento
 DB_SYNC_ON_BOOT=false
 ```
-
-## Como preparar o banco
-
-1. Crie o banco manualmente:
-
-```sql
-CREATE DATABASE resolve_mais;
-```
-
-2. Rode as migrations:
-
-```powershell
-npm run migrations
-```
-
-### Migration de tipos de usuario
-
-Arquivo:
-
-```text
-backend/app/migrations/20260320220000-add-user-type-and-cnpj.js
-```
-
-Essa migration adiciona:
-
-- `user_type` com valores permitidos: `cliente`, `funcionario`, `empresa`
-- coluna `cnpj`
-- `cpf` nullable
-- indices unicos filtrados para `cpf` e `cnpj` quando nao nulos
-
-### Migration da relacao empresa-administrador
-
-Arquivo:
-
-```text
-backend/app/migrations/20260321001000-create-company-admin-table.js
-```
-
-Essa migration cria a tabela `CompanyAdmin`, que relaciona usuarios administradores com empresas.
-
-### Migration da associacao de usuario com empresa
-
-Arquivo:
-
-```text
-backend/app/migrations/20260321030000-add-company-id-to-user.js
-```
-
-Essa migration adiciona `company_id` na tabela `User`, para associar funcionarios e administradores a uma empresa.
 
 ## Como rodar localmente
 
@@ -142,10 +90,10 @@ npm install
 Copy-Item .env.example .env
 ```
 
-### 3. Rode migrations
+### 3. Crie o banco manualmente
 
-```powershell
-npm run migrations
+```sql
+CREATE DATABASE resolve_mais;
 ```
 
 ### 4. Suba a API
@@ -170,13 +118,11 @@ npm start
 
 - `npm run dev`: inicia em modo desenvolvimento com `nodemon`
 - `npm start`: inicia com `node index.js`
-- `npm run migrations`: aplica migrations pendentes (`sequelize-cli db:migrate`)
-- `npm run migrations:undo`: desfaz a ultima migration (`sequelize-cli db:migrate:undo`)
 - `npm test`: placeholder
 
 ## Observação sobre sync automático
 
-Por padrão, o projeto **nao executa `sequelize.sync()`** automaticamente.
+Por padrão, o projeto **não executa `sequelize.sync()`** automaticamente.
 
 Se você quiser forçar sync automático ao subir (não recomendado em produção), use:
 

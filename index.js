@@ -1,7 +1,8 @@
-require("dotenv").config();
-const express = require("express");
-const cors = require("cors");
-const { routesController } = require("./app/routes");
+import "dotenv/config";
+import cors from "cors";
+import express from "express";
+import { routesController } from "./app/routes/index.js";
+import "./app/models/index.js";
 
 const app = express();
 
@@ -12,14 +13,12 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static("public"));
 
-require("./app/models");
-
 routesController(app);
 
 app.get("/", (req, res) => {
-    res.send("Hello World!");
+  res.send("Hello World!");
 });
 
 app.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT} 🚀🚀`);
+  console.log(`Server is running on port ${PORT}`);
 });

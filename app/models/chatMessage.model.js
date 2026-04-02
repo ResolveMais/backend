@@ -1,4 +1,4 @@
-module.exports = (sequelize, Sequelize) => {
+const initChatMessageModel = (sequelize, Sequelize) => {
   const ChatMessage = sequelize.define(
     "ChatMessage",
     {
@@ -50,3 +50,5 @@ module.exports = (sequelize, Sequelize) => {
 
   return ChatMessage;
 };
+
+export default initChatMessageModel;

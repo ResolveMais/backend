@@ -1,135 +1,133 @@
-const ticketRepository = require('../repositories/ticket.repository');
-const companyRepository = require('../repositories/company.repository');
+import companyRepository from "../repositories/company.repository.js";
+import ticketRepository from "../repositories/ticket.repository.js";
 
-exports.createTicket = async ({ description, userId, companyId, complaintTitleId }) => {
+const createTicket = async ({ description, userId, companyId, complaintTitleId }) => {
   try {
-    console.log('🔧 SERVICE: Criando ticket...');
-    if (!description?.trim()) return { status: 400, message: 'Descrição é obrigatória' };
-    if (!userId) return { status: 400, message: 'Usuário não autenticado' };
-    if (!companyId) return { status: 400, message: 'Empresa é obrigatória' };
-    if (!complaintTitleId) return { status: 400, message: 'Assunto é obrigatório' };
+    console.log("Service: creating ticket...");
+    if (!description?.trim()) return { status: 400, message: "Descrição é obrigatória" };
+    if (!userId) return { status: 400, message: "Usuário não autenticado" };
+    if (!companyId) return { status: 400, message: "Empresa é obrigatória" };
+    if (!complaintTitleId) return { status: 400, message: "Assunto é obrigatório" };
 
     const newTicket = await ticketRepository.create({
       description: description.trim(),
       userId,
       companyId,
-      complaintTitleId
+      complaintTitleId,
     });
 
     return {
       status: 201,
-      message: 'Ticket criado com sucesso',
+      message: "Ticket criado com sucesso",
       ticket: {
         id: newTicket.id,
         descricao: newTicket.description,
         status: newTicket.status,
-        criadoEm: newTicket.createdAt
-      }
+        criadoEm: newTicket.createdAt,
+      },
     };
   } catch (error) {
-    console.error('❌ SERVICE: Erro ao criar ticket:', error);
-    return { status: 500, message: 'Erro interno ao criar ticket. Tente novamente mais tarde.' };
+    console.error("Erro ao criar ticket:", error);
+    return { status: 500, message: "Erro interno ao criar ticket. Tente novamente mais tarde." };
   }
 };
 
-exports.getCompanies = async () => {
+const getCompanies = async () => {
   try {
-    console.log('🏢 SERVICE: Buscando empresas...');
+    console.log("Service: fetching companies...");
     const companies = await companyRepository.getAll();
     return { status: 200, companies };
   } catch (error) {
-    console.error('❌ SERVICE: Erro ao buscar empresas:', error);
-    return { status: 500, message: 'Erro ao buscar empresas.' };
+    console.error("Erro ao buscar empresas:", error);
+    return { status: 500, message: "Erro ao buscar empresas." };
   }
 };
 
-exports.getComplaintTitlesByCompany = async (companyId) => {
+const getComplaintTitlesByCompany = async (companyId) => {
   try {
-    if (!companyId) return { status: 400, message: 'ID da empresa é obrigatório' };
+    if (!companyId) return { status: 400, message: "ID da empresa é obrigatório" };
     const complaintTitles = await ticketRepository.getComplaintTitlesByCompany(companyId);
     return { status: 200, complaintTitles };
   } catch (error) {
-    console.error('❌ SERVICE: Erro ao buscar assuntos:', error);
-    return { status: 500, message: 'Erro ao buscar assuntos.' };
+    console.error("Erro ao buscar assuntos:", error);
+    return { status: 500, message: "Erro ao buscar assuntos." };
   }
 };
 
-exports.getUserTickets = async (userId) => {
+const getUserTickets = async (userId) => {
   try {
-    if (!userId) return { status: 400, message: 'ID do usuário é obrigatório' };
+    if (!userId) return { status: 400, message: "ID do usuário é obrigatório" };
 
     const tickets = await ticketRepository.getByUserId(userId);
 
     const sanitized = tickets.map((t) => ({
       id: t.id,
-      empresa: t.empresa?.name || 'Empresa não informada',
-      tituloReclamacao: t.tituloReclamacao?.title || 'Sem título',
+      empresa: t.empresa?.name || "Empresa não informada",
+      tituloReclamacao: t.tituloReclamacao?.title || "Sem título",
       descricao: t.description,
       status: t.status,
-      criadoEm: t.createdAt
+      criadoEm: t.createdAt,
     }));
 
     return { status: 200, tickets: sanitized };
   } catch (error) {
-    console.error('❌ SERVICE: Erro ao buscar tickets:', error);
-    return { status: 500, message: 'Erro ao buscar tickets.' };
+    console.error("Erro ao buscar tickets:", error);
+    return { status: 500, message: "Erro ao buscar tickets." };
   }
 };
 
-// ✅ NOVO SERVICE: Buscar tickets abertos e pendentes
-exports.getUserOpenAndPendingTickets = async (userId) => {
+const getUserOpenAndPendingTickets = async (userId) => {
   try {
-    if (!userId) return { status: 400, message: 'ID do usuário é obrigatório' };
+    if (!userId) return { status: 400, message: "ID do usuário é obrigatório" };
 
     const tickets = await ticketRepository.getOpenAndPendingByUserId(userId);
 
     const sanitized = tickets.map((t) => ({
       id: t.id,
-      empresa: t.empresa?.name || 'Empresa não informada',
-      tituloReclamacao: t.tituloReclamacao?.title || 'Sem título',
+      empresa: t.empresa?.name || "Empresa não informada",
+      tituloReclamacao: t.tituloReclamacao?.title || "Sem título",
       descricao: t.description,
       status: t.status,
-      criadoEm: t.createdAt
+      criadoEm: t.createdAt,
     }));
 
     return { status: 200, tickets: sanitized };
   } catch (error) {
-    console.error('❌ SERVICE: Erro ao buscar tickets abertos/pendentes:', error);
-    return { status: 500, message: 'Erro ao buscar tickets.' };
+    console.error("Erro ao buscar tickets abertos/pendentes:", error);
+    return { status: 500, message: "Erro ao buscar tickets." };
   }
 };
 
-exports.getUserClosedTickets = async (userId) => {
+const getUserClosedTickets = async (userId) => {
   try {
-    if (!userId) return { status: 400, message: 'ID do usuário é obrigatório' };
+    if (!userId) return { status: 400, message: "ID do usuário é obrigatório" };
 
     const tickets = await ticketRepository.getClosedByUserId(userId);
 
     const sanitized = tickets.map((t) => ({
       id: t.id,
-      empresa: t.empresa?.name || 'Empresa não informada',
-      tituloReclamacao: t.tituloReclamacao?.title || 'Sem título',
+      empresa: t.empresa?.name || "Empresa não informada",
+      tituloReclamacao: t.tituloReclamacao?.title || "Sem título",
       descricao: t.description,
       status: t.status,
       criadoEm: t.createdAt,
-      finalizadoEm: t.updatedAt
-
+      finalizadoEm: t.updatedAt,
     }));
 
     return { status: 200, tickets: sanitized };
   } catch (error) {
-    console.error('❌ SERVICE: Erro ao buscar tickets finalizados:', error);
-    return { status: 500, message: 'Erro ao buscar tickets finalizados.' };
+    console.error("Erro ao buscar tickets finalizados:", error);
+    return { status: 500, message: "Erro ao buscar tickets finalizados." };
   }
 };
 
-exports.getRecentUpdates = async (userId) => {
+const getRecentUpdates = async (userId) => {
   try {
-    if (!userId) return { status: 400, message: 'ID do usuário é obrigatório' };
+    if (!userId) return { status: 400, message: "ID do usuário é obrigatório" };
 
     const updates = await ticketRepository.getRecentUpdates(userId, 3);
 
-    const formattedUpdates = updates.map(update => ({
+    const formattedUpdates = updates.map((update) => ({
       id: update.id,
       message: update.message,
       type: update.type,
@@ -138,16 +136,38 @@ exports.getRecentUpdates = async (userId) => {
         id: update.ticket?.id,
         description: update.ticket?.description,
         status: update.ticket?.status,
-        company: update.ticket?.empresa?.name
+        company: update.ticket?.empresa?.name,
       },
-      employee: update.employee ? {
-        role: update.employee?.role?.roleName
-      } : null
+      employee: update.employee
+        ? {
+          role: update.employee?.role?.roleName,
+        }
+        : null,
     }));
 
     return { status: 200, updates: formattedUpdates };
   } catch (error) {
-    console.error('❌ SERVICE: Erro ao buscar atualizações:', error);
-    return { status: 500, message: 'Erro ao buscar atualizações.' };
+    console.error("Erro ao buscar atualizações:", error);
+    return { status: 500, message: "Erro ao buscar atualizações." };
   }
+};
+
+export {
+  createTicket,
+  getCompanies,
+  getComplaintTitlesByCompany,
+  getRecentUpdates,
+  getUserClosedTickets,
+  getUserOpenAndPendingTickets,
+  getUserTickets,
+};
+
+export default {
+  createTicket,
+  getCompanies,
+  getComplaintTitlesByCompany,
+  getUserTickets,
+  getUserOpenAndPendingTickets,
+  getUserClosedTickets,
+  getRecentUpdates,
 };

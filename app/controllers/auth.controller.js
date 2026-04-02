@@ -1,6 +1,6 @@
-const authService = require('../services/auth.service');
+import authService from "../services/auth.service.js";
 
-exports.login = async (req, res) => {
+const login = async (req, res) => {
   const { email, password } = req.body;
 
   const response = await authService.login({ email, password });
@@ -8,7 +8,7 @@ exports.login = async (req, res) => {
   return res.status(response.status).json({ ...response });
 };
 
-exports.register = async (req, res) => {
+const register = async (req, res) => {
   const {
     name,
     email,
@@ -44,7 +44,7 @@ exports.register = async (req, res) => {
   return res.status(response.status).json({ ...response });
 };
 
-exports.validateToken = async (req, res) => {
+const validateToken = async (req, res) => {
   const { user } = req;
 
   if (!user || !user?.id) return res.status(401).json({ error: 'User not found' });
@@ -52,20 +52,31 @@ exports.validateToken = async (req, res) => {
   return res.status(200).json({ status: 200, message: "Valid token", user });
 };
 
-exports.forgotPassword = async (req, res) => {
+const forgotPassword = async (req, res) => {
   const { email } = req.body || {};
   const response = await authService.forgotPassword({ email });
   return res.status(response.status).json({ ...response });
 };
 
-exports.resetPassword = async (req, res) => {
+const resetPassword = async (req, res) => {
   const { token, newPassword } = req.body || {};
   const response = await authService.resetPassword({ token, newPassword });
   return res.status(response.status).json({ ...response });
 };
 
-exports.validateResetToken = async (req, res) => {
+const validateResetToken = async (req, res) => {
   const { token } = req.body || {};
   const response = await authService.validateResetToken({ token });
   return res.status(response.status).json({ ...response });
+};
+
+export { forgotPassword, login, register, resetPassword, validateResetToken, validateToken };
+
+export default {
+  login,
+  register,
+  validateToken,
+  forgotPassword,
+  resetPassword,
+  validateResetToken,
 };
