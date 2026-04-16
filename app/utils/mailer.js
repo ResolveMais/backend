@@ -126,9 +126,88 @@ const sendPasswordResetEmail = async ({ to, name, resetUrl, expiresInMinutes }) 
   return true;
 };
 
-export { isMailerConfigured, sendPasswordResetEmail };
+const sendTicketPendingReplyEmail = async ({
+  to,
+  recipientName,
+  senderName,
+  companyName,
+  ticketId,
+  subjectTitle,
+  waitingFor,
+}) => {
+  if (!isMailerConfigured()) {
+    console.warn("SMTP settings are missing. Ticket reminder e-mail not sent.");
+    return false;
+  }
+
+  const config = getMailConfig();
+  const safeRecipientName = String(recipientName || "").trim() || "usuario";
+  const safeSenderName = String(senderName || "").trim() || "Atendimento Resolve Mais";
+  const safeCompanyName = String(companyName || "").trim() || "Resolve Mais";
+  const safeSubjectTitle = String(subjectTitle || "").trim() || "Atendimento";
+  const safeWaitingFor = String(waitingFor || "").trim() || "uma resposta";
+  const protocol = `3330${String(ticketId || "").padStart(4, "0")}`;
+
+  await getTransporter()
+    .sendMail({
+      from: config.from,
+      to,
+      subject: `Nova mensagem aguardando resposta - Ticket ${protocol}`,
+      text: [
+        `Olá, ${safeRecipientName}.`,
+        "",
+        `Uma nova mensagem foi enviada por ${safeSenderName} no ticket ${protocol}.`,
+        `Empresa: ${safeCompanyName}.`,
+        `Assunto: ${safeSubjectTitle}.`,
+        `No momento, o atendimento está aguardando ${safeWaitingFor}.`,
+        "",
+        "Acesse a plataforma para continuar a conversa.",
+      ].join("\n"),
+      html: `
+        <div style="font-family: Arial, sans-serif; background-color: #f4f6f8; padding: 20px;">
+          <table align="center" width="100%" max-width="560px" style="background: #ffffff; border-radius: 10px; padding: 24px;">
+            <tr>
+              <td align="center">
+                <h2 style="color: #00C853; margin-bottom: 8px;">Resolve Mais</h2>
+                <p style="color: #333; font-size: 16px;">Olá, ${safeRecipientName}.</p>
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <p style="color: #555; font-size: 14px; line-height: 1.6;">
+                  Uma nova mensagem foi enviada por <strong>${safeSenderName}</strong> no ticket
+                  <strong>${protocol}</strong>.
+                </p>
+
+                <div style="margin: 18px 0; padding: 16px; background: #f9fafb; border-radius: 8px; border: 1px solid #e5e7eb;">
+                  <p style="margin: 0 0 6px; color: #111827;"><strong>Empresa:</strong> ${safeCompanyName}</p>
+                  <p style="margin: 0 0 6px; color: #111827;"><strong>Assunto:</strong> ${safeSubjectTitle}</p>
+                  <p style="margin: 0; color: #111827;"><strong>Aguardando:</strong> ${safeWaitingFor}</p>
+                </div>
+
+                <p style="color: #555; font-size: 14px; line-height: 1.6;">
+                  Acesse a plataforma para visualizar a conversa e dar continuidade ao atendimento.
+                </p>
+              </td>
+            </tr>
+          </table>
+        </div>
+      `,
+    })
+    .then(() => {
+      console.log(`Ticket reminder email sent to ${to}`);
+    })
+    .catch((error) => {
+      console.error(`Error sending ticket reminder email to ${to}: ${error.message}`);
+    });
+
+  return true;
+};
+
+export { isMailerConfigured, sendPasswordResetEmail, sendTicketPendingReplyEmail };
 
 export default {
   isMailerConfigured,
   sendPasswordResetEmail,
+  sendTicketPendingReplyEmail,
 };
