@@ -2,8 +2,16 @@ import OpenAI from "openai";
 import { CHATBOT_AGENT } from "../config/chatbot.config.js";
 import chatbotRepository from "../repositories/chatbot.repository.js";
 import ticketRepository from "../repositories/ticket.repository.js";
+import { broadcastTicketEvent, hasViewerTypeConnected } from "../utils/ticketRealtime.js";
+import {
+  TICKET_LOG_TYPE,
+  TICKET_MESSAGE_SENDER,
+  TICKET_STATUS,
+  TICKET_VIEWER_TYPE,
+  normalizeTicketStatus,
+} from "../utils/ticketStatus.js";
 
-const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-4.1-mini";
+const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-4.1-nano";
 const MAX_HISTORY_MESSAGES = 20;
 
 const AGENT = Object.freeze(CHATBOT_AGENT);
@@ -19,6 +27,12 @@ const sanitizeStoredMessages = (messages) =>
     id: message.id,
     role: message.role,
     content: message.content,
+    senderType: message.senderType || message.sender_type || null,
+    senderName: message.senderName || message.sender_name || null,
+    senderUserId: message.senderUserId || message.sender_user_id || null,
+    messageType: message.messageType || message.message_type || "chat",
+    customerReadAt: message.customerReadAt || message.customer_read_at || null,
+    companyReadAt: message.companyReadAt || message.company_read_at || null,
     createdAt: message.createdAt,
   }));
 
@@ -50,13 +64,26 @@ const formatDateTime = (dateValue) => {
   return parsed.toISOString();
 };
 
+const buildRealtimeMessagePayload = (message) => ({
+  id: message.id,
+  role: message.role,
+  content: message.content,
+  senderType: message.senderType || message.sender_type || null,
+  senderName: message.senderName || message.sender_name || null,
+  senderUserId: message.senderUserId || message.sender_user_id || null,
+  messageType: message.messageType || message.message_type || "chat",
+  customerReadAt: message.customerReadAt || message.customer_read_at || null,
+  companyReadAt: message.companyReadAt || message.company_read_at || null,
+  createdAt: message.createdAt,
+});
+
 const buildTicketContextPrompt = (ticket) => {
   if (!ticket) return null;
 
   const createdAt = formatDateTime(ticket.createdAt);
   const updatedAt = formatDateTime(ticket.updatedAt || ticket.createdAt);
-  const empresa = ticket.empresa?.name || "Nao informado";
-  const assunto = ticket.tituloReclamacao?.title || "Nao informado";
+  const empresa = ticket.empresa?.name || "Não informado";
+  const assunto = ticket.tituloReclamacao?.title || "Não informado";
 
   const lines = [
     "Contexto do ticket do usuario (dados internos do sistema):",
@@ -64,18 +91,18 @@ const buildTicketContextPrompt = (ticket) => {
     `Status: ${ticket.status}`,
     `Empresa: ${empresa}`,
     `Assunto: ${assunto}`,
-    `Descricao: ${ticket.description}`,
+    `Descrição: ${ticket.description}`,
   ];
 
   if (createdAt) lines.push(`Criado em: ${createdAt}`);
-  if (updatedAt) lines.push(`Ultima atualizacao: ${updatedAt}`);
+  if (updatedAt) lines.push(`Última atualização: ${updatedAt}`);
   if (ticket.lastUpdateMessage) {
-    lines.push(`Ultima mensagem: ${ticket.lastUpdateMessage}`);
+    lines.push(`Última mensagem: ${ticket.lastUpdateMessage}`);
   }
 
   lines.push(
     "Use esse contexto para responder sobre status e andamento.",
-    "Se algo nao estiver aqui, diga que nao ha informacao registrada."
+    "Se algo não estiver aqui, diga que não há informação registrada."
   );
 
   return lines.join("\n");
@@ -188,7 +215,7 @@ const streamOpenAICompletion = async ({
 const getConversation = async ({ userId, ticketId = null }) => {
   try {
     if (!userId) {
-      return { status: 401, message: "Usuario nao autenticado." };
+      return { status: 401, message: "Usuário não autenticado." };
     }
 
     const parsedTicketId = parseTicketId(ticketId);
@@ -201,7 +228,7 @@ const getConversation = async ({ userId, ticketId = null }) => {
       });
 
       if (!ticket) {
-        return { status: 404, message: "Ticket nao encontrado." };
+        return { status: 404, message: "Ticket não encontrado." };
       }
     }
 
@@ -213,6 +240,50 @@ const getConversation = async ({ userId, ticketId = null }) => {
       : await chatbotRepository.getActiveConversationByUserId(userId);
 
     if (!conversation) {
+      if (ticket && normalizeTicketStatus(ticket.status) === TICKET_STATUS.ABERTO) {
+        const createdConversation = await chatbotRepository.createConversation({
+          userId,
+          ticketId: parsedTicketId,
+        });
+
+        const greetingMessage = await chatbotRepository.createMessage({
+          conversationId: createdConversation.id,
+          role: "assistant",
+          content: "Oi! Sou o Resolve Assist. Me conte o que aconteceu e vou tentar te ajudar da melhor forma possível. Se eu não conseguir resolver por aqui, um atendente dará continuidade ao seu atendimento neste mesmo chamado.",
+          senderType: TICKET_MESSAGE_SENDER.BOT,
+          senderName: AGENT.name,
+          messageType: "chat",
+          customerReadAt: new Date(),
+        });
+
+        return {
+          status: 200,
+          conversation: {
+            id: createdConversation.id,
+            createdAt: createdConversation.createdAt,
+            updatedAt: createdConversation.updatedAt,
+          },
+          messages: sanitizeStoredMessages([greetingMessage]),
+          agent: {
+            name: AGENT.name,
+            description: AGENT.description,
+            prompt: AGENT.prompt,
+          },
+          ticket: ticket
+            ? {
+              id: ticket.id,
+              status: ticket.status,
+              description: ticket.description,
+              company: ticket.empresa?.name || null,
+              subject: ticket.tituloReclamacao?.title || null,
+              createdAt: ticket.createdAt,
+              updatedAt: ticket.updatedAt,
+              lastUpdateMessage: ticket.lastUpdateMessage || null,
+            }
+            : null,
+        };
+      }
+
       return {
         status: 200,
         conversation: null,
@@ -273,10 +344,7 @@ const getConversation = async ({ userId, ticketId = null }) => {
     const status = error?.statusCode || 500;
     return {
       status,
-      message:
-        status === 500
-          ? "Erro interno ao carregar conversa."
-          : error.message || "Erro ao carregar conversa.",
+      message: status === 500 ? "Erro interno ao carregar conversa." : error.message || "Erro ao carregar conversa.",
     };
   }
 };
@@ -288,7 +356,7 @@ const clearConversation = async ({
 }) => {
   try {
     if (!userId) {
-      return { status: 401, message: "Usuario nao autenticado." };
+      return { status: 401, message: "Usuário não autenticado." };
     }
 
     const parsedTicketId = parseTicketId(ticketId);
@@ -309,7 +377,7 @@ const clearConversation = async ({
     });
 
     if (!deleted) {
-      return { status: 404, message: "Conversa nao encontrada." };
+      return { status: 404, message: "Conversa não encontrada." };
     }
 
     return { status: 200, message: "Conversa limpa com sucesso." };
@@ -332,9 +400,7 @@ const streamMessage = async ({
   onStart,
   onToken,
 }) => {
-  if (!userId) {
-    throw createServiceError("Usuario nao autenticado.", 401);
-  }
+  if (!userId) throw createServiceError("Usuário não autenticado.", 401);
 
   const cleanMessage = String(message || "").trim();
   if (!cleanMessage) {
@@ -342,9 +408,7 @@ const streamMessage = async ({
   }
 
   const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) {
-    throw createServiceError("Variavel OPENAI_API_KEY nao configurada no backend.", 500);
-  }
+  if (!apiKey) throw createServiceError("Variavel OPENAI_API_KEY não configurada no backend.", 500);
 
   const parsedTicketId = parseTicketId(ticketId);
   let ticket = null;
@@ -356,7 +420,7 @@ const streamMessage = async ({
     });
 
     if (!ticket) {
-      throw createServiceError("Ticket nao encontrado.", 404);
+      throw createServiceError("Ticket não encontrado.", 404);
     }
   }
 
@@ -385,11 +449,39 @@ const streamMessage = async ({
 
   const historyAscending = [...recentHistoryDescending].reverse();
 
-  await chatbotRepository.createMessage({
+  const companyViewerConnected = parsedTicketId
+    ? hasViewerTypeConnected({
+      ticketId: parsedTicketId,
+      viewerType: TICKET_VIEWER_TYPE.COMPANY,
+    })
+    : false;
+
+  const createdUserMessage = await chatbotRepository.createMessage({
     conversationId: conversation.id,
     role: "user",
     content: cleanMessage,
+    senderType: TICKET_MESSAGE_SENDER.CLIENTE,
+    senderName: ticket?.cliente?.name || null,
+    senderUserId: userId,
+    companyReadAt: companyViewerConnected ? new Date() : null,
   });
+
+  if (parsedTicketId) {
+    await ticketRepository.createUpdate({
+      ticketId: parsedTicketId,
+      message: `${ticket?.cliente?.name || "Cliente"} enviou uma mensagem ao chatbot`,
+      type: TICKET_LOG_TYPE.MESSAGE,
+      actorUserId: userId,
+      details: {
+        senderType: TICKET_MESSAGE_SENDER.CLIENTE,
+      },
+    });
+
+    broadcastTicketEvent(parsedTicketId, "message_created", {
+      ticketId: parsedTicketId,
+      message: buildRealtimeMessagePayload(createdUserMessage),
+    });
+  }
 
   const openAIMessages = [
     {
@@ -420,14 +512,34 @@ const streamMessage = async ({
   });
 
   if (!assistantResponse) {
-    throw createServiceError("A IA nao retornou resposta valida.", 502);
+    throw createServiceError("A IA não retornou resposta válida.", 502);
   }
 
   const assistantMessage = await chatbotRepository.createMessage({
     conversationId: conversation.id,
     role: "assistant",
     content: assistantResponse,
+    senderType: TICKET_MESSAGE_SENDER.BOT,
+    senderName: AGENT.name,
+    customerReadAt: new Date(),
+    companyReadAt: companyViewerConnected ? new Date() : null,
   });
+
+  if (parsedTicketId) {
+    await ticketRepository.createUpdate({
+      ticketId: parsedTicketId,
+      message: "O chatbot respondeu ao cliente",
+      type: TICKET_LOG_TYPE.MESSAGE,
+      details: {
+        senderType: TICKET_MESSAGE_SENDER.BOT,
+      },
+    });
+
+    broadcastTicketEvent(parsedTicketId, "message_created", {
+      ticketId: parsedTicketId,
+      message: buildRealtimeMessagePayload(assistantMessage),
+    });
+  }
 
   return {
     conversationId: conversation.id,
