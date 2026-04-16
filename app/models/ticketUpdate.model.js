@@ -8,12 +8,31 @@ const initTicketUpdateModel = (sequelize, Sequelize) => {
         autoIncrement: true,
       },
       message: {
-        type: Sequelize.STRING,
+        type: Sequelize.TEXT,
         allowNull: false,
       },
       type: {
-        type: Sequelize.ENUM("response", "status_change", "creation", "closure"),
+        type: Sequelize.STRING(40),
         allowNull: false,
+},
+      actorUserId: {
+        type: Sequelize.INTEGER,
+        allowNull: true,
+        field: "actor_user_id",
+      },
+      statusFrom: {
+        type: Sequelize.STRING(30),
+        allowNull: true,
+        field: "status_from",
+      },
+      statusTo: {
+        type: Sequelize.STRING(30),
+        allowNull: true,
+        field: "status_to",
+      },
+      details: {
+        type: Sequelize.TEXT,
+        allowNull: true,
       },
       createdAt: {
         type: Sequelize.DATE,
@@ -35,6 +54,12 @@ const initTicketUpdateModel = (sequelize, Sequelize) => {
     TicketUpdate.belongsTo(models.Employee, {
       foreignKey: "employee_id",
       as: "employee",
+      allowNull: true,
+    });
+
+    TicketUpdate.belongsTo(models.User, {
+      foreignKey: "actor_user_id",
+      as: "actor",
       allowNull: true,
     });
   };

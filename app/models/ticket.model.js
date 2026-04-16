@@ -28,6 +28,41 @@ const initTicketModel = (sequelize, Sequelize) => {
         type: Sequelize.STRING,
         allowNull: true,
       },
+      assignedUserId: {
+        type: Sequelize.INTEGER,
+        allowNull: true,
+        field: "assigned_user_id",
+      },
+      acceptedAt: {
+        type: Sequelize.DATE,
+        allowNull: true,
+        field: "accepted_at",
+      },
+      resolvedAt: {
+        type: Sequelize.DATE,
+        allowNull: true,
+        field: "resolved_at",
+      },
+      closedAt: {
+        type: Sequelize.DATE,
+        allowNull: true,
+        field: "closed_at",
+      },
+      reopenedAt: {
+        type: Sequelize.DATE,
+        allowNull: true,
+        field: "reopened_at",
+      },
+      lastInteractionAt: {
+        type: Sequelize.DATE,
+        allowNull: true,
+        field: "last_interaction_at",
+      },
+      autoClosedAt: {
+        type: Sequelize.DATE,
+        allowNull: true,
+        field: "auto_closed_at",
+      },
     },
     {
       tableName: "Ticket",
@@ -49,6 +84,11 @@ const initTicketModel = (sequelize, Sequelize) => {
     Ticket.belongsTo(models.ComplaintTitle, {
       foreignKey: "complaintTitle_id",
       as: "tituloReclamacao",
+    });
+
+    Ticket.belongsTo(models.User, {
+      foreignKey: "assigned_user_id",
+      as: "assignedEmployee",
     });
 
     Ticket.hasMany(models.TicketUpdate, {
