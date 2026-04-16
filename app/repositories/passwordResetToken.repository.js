@@ -1,4 +1,5 @@
-import { PasswordResetToken as PasswordResetTokenModel } from "../models/index.js";
+import db from "../models/index.js";
+const { PasswordResetToken: PasswordResetTokenModel } = db;
 
 const create = async ({ userId, tokenHash, expiresAt }, options = {}) =>
   PasswordResetTokenModel.create(

@@ -1,7 +1,9 @@
 import bcrypt from "bcrypt";
-import { sequelize } from "../models/index.js";
 import companyRepository from "../repositories/company.repository.js";
 import userRepository from "../repositories/user.repository.js";
+import db from "../models/index.js";
+
+const { sequelize } = db;
 
 const USER_TYPES = Object.freeze({
   CLIENTE: "cliente",

@@ -1,4 +1,5 @@
-import { User as UserModel } from "../models/index.js";
+import db from "../models/index.js";
+const { User: UserModel } = db;
 
 const baseUserAttributes = [
   "id",

@@ -1,8 +1,14 @@
-import {
+import db from "../models/index.js";
+
+const {
   ChatConversation,
   ChatMessage,
+  Company,
+  ComplaintTitle,
+  Ticket,
+  User,
   sequelize,
-} from "../models/index.js";
+} = db;
 
 const ACTIVE_CONVERSATION_WHERE = { del: false };
 

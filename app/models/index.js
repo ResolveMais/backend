@@ -1,17 +1,12 @@
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { Sequelize } from "sequelize";
 import dbConfig from "../config/db.config.js";
-import initChatConversationModel from "./chatConversation.model.js";
-import initChatMessageModel from "./chatMessage.model.js";
-import initCompanyAdminModel from "./companyAdmin.model.js";
-import initCompanyModel from "./company.model.js";
-import initComplaintTitleModel from "./complaintTitle.model.js";
-import initEmployeeModel from "./employee.model.js";
-import initPasswordResetTokenModel from "./passwordResetToken.model.js";
-import initRoleModel from "./role.model.js";
-import initTicketAssignmentModel from "./ticketAssignment.model.js";
-import initTicketModel from "./ticket.model.js";
-import initTicketUpdateModel from "./ticketUpdate.model.js";
-import initUserModel from "./user.model.js";
+import { ensureApplicationSchema } from "../utils/schemaBootstrap.js";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const sequelize = new Sequelize(dbConfig.DB, dbConfig.USER, dbConfig.PASSWORD, {
   host: dbConfig.HOST,
@@ -26,53 +21,50 @@ const sequelize = new Sequelize(dbConfig.DB, dbConfig.USER, dbConfig.PASSWORD, {
   },
 });
 
-sequelize
-  .authenticate()
-  .then(() => {
-    console.log("Connection has been established successfully.");
-    if (process.env.DB_SYNC_ON_BOOT === "true") {
-      console.log("DB_SYNC_ON_BOOT=true, running sequelize.sync()");
-      sequelize.sync();
-      return;
+const getModelFiles = (directoryPath) => {
+  return fs
+    .readdirSync(directoryPath, { withFileTypes: true })
+    .flatMap((entry) => {
+      const entryPath = path.join(directoryPath, entry.name);
+
+      if (entry.isDirectory()) {
+        return getModelFiles(entryPath);
+      }
+
+      return entry.name.endsWith(".model.js") ? [entryPath] : [];
+    })
+    .sort();
+};
+
+const modelFiles = getModelFiles(__dirname);
+
+const modelEntries = await Promise.all(
+  modelFiles.map(async (modelFilePath) => {
+    const modelModule = await import(pathToFileURL(modelFilePath).href);
+    const initModel = modelModule.default;
+
+    if (typeof initModel !== "function") {
+      throw new Error(
+        `The file "${path.basename(modelFilePath)}" does not export a default model initializer function.`
+      );
     }
 
-    console.log("Database sync skipped.");
-  })
-  .catch((err) => {
-    console.log("Database connection is not working!", err);
-  });
+    const model = initModel(sequelize, Sequelize.DataTypes);
 
-const ComplaintTitle = initComplaintTitleModel(sequelize, Sequelize.DataTypes);
-const CompanyAdmin = initCompanyAdminModel(sequelize, Sequelize.DataTypes);
-const Company = initCompanyModel(sequelize, Sequelize.DataTypes);
-const ChatConversation = initChatConversationModel(sequelize, Sequelize.DataTypes);
-const ChatMessage = initChatMessageModel(sequelize, Sequelize.DataTypes);
-const Employee = initEmployeeModel(sequelize, Sequelize.DataTypes);
-const PasswordResetToken = initPasswordResetTokenModel(
-  sequelize,
-  Sequelize.DataTypes
+    if (!model?.name) {
+      throw new Error(
+        `The model initialized from "${path.basename(modelFilePath)}" does not have a valid name.`
+      );
+    }
+
+    return [model.name, model];
+  })
 );
-const Role = initRoleModel(sequelize, Sequelize.DataTypes);
-const TicketAssignment = initTicketAssignmentModel(sequelize, Sequelize.DataTypes);
-const Ticket = initTicketModel(sequelize, Sequelize.DataTypes);
-const TicketUpdate = initTicketUpdateModel(sequelize, Sequelize.DataTypes);
-const User = initUserModel(sequelize, Sequelize.DataTypes);
 
 const db = {
   Sequelize,
   sequelize,
-  ComplaintTitle,
-  CompanyAdmin,
-  Company,
-  ChatConversation,
-  ChatMessage,
-  Employee,
-  PasswordResetToken,
-  Role,
-  TicketAssignment,
-  Ticket,
-  TicketUpdate,
-  User,
+  ...Object.fromEntries(modelEntries),
 };
 
 Object.values(db).forEach((model) => {
@@ -81,21 +73,31 @@ Object.values(db).forEach((model) => {
   }
 });
 
-export {
-  Sequelize,
-  sequelize,
-  ComplaintTitle,
-  CompanyAdmin,
-  Company,
-  ChatConversation,
-  ChatMessage,
-  Employee,
-  PasswordResetToken,
-  Role,
-  TicketAssignment,
-  Ticket,
-  TicketUpdate,
-  User,
-};
+const databaseReady = (async () => {
+  try {
+    await sequelize.authenticate();
+    console.log("Connection has been established successfully.");
+
+    if (process.env.DB_SYNC_ON_BOOT === "true") {
+      const syncOptions =
+        process.env.DB_SYNC_ALTER === "true" ? { alter: true } : undefined;
+
+      console.log(
+        `DB_SYNC_ON_BOOT=true, running sequelize.sync(${syncOptions ? "alter" : "default"})`
+      );
+
+      await sequelize.sync(syncOptions);
+      await ensureApplicationSchema({ sequelize, models: db });
+      return;
+    }
+
+    console.log("Database sync skipped.");
+  } catch (err) {
+    console.log("Database connection is not working!", err);
+    throw err;
+  }
+})();
+
+export { Sequelize, sequelize, databaseReady };
 
 export default db;

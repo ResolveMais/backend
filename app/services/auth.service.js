@@ -1,11 +1,13 @@
 import bcrypt from "bcrypt";
 import crypto from "node:crypto";
-import { sequelize } from "../models/index.js";
 import companyRepository from "../repositories/company.repository.js";
 import passwordResetTokenRepository from "../repositories/passwordResetToken.repository.js";
 import userRepository from "../repositories/user.repository.js";
 import jwt from "../utils/jwt.js";
 import { sendPasswordResetEmail } from "../utils/mailer.js";
+
+import db from "../models/index.js";
+const { sequelize } = db;
 
 const USER_TYPES = Object.freeze({
   CLIENTE: "cliente",

@@ -1,10 +1,12 @@
-import {
-  Company as CompanyModel,
-  CompanyAdmin as CompanyAdminModel,
-  ComplaintTitle as ComplaintTitleModel,
-  Ticket as TicketModel,
-  User as UserModel,
-} from "../models/index.js";
+import db from "../models/index.js";
+
+const {
+  Company: CompanyModel,
+  CompanyAdmin: CompanyAdminModel,
+  ComplaintTitle: ComplaintTitleModel,
+  Ticket: TicketModel,
+  User: UserModel,
+} = db;
 
 const getAll = async () => {
   try {
