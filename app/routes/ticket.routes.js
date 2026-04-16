@@ -14,4 +14,18 @@ router.get("/user-closed-tickets", TicketController.getUserClosedTickets);
 router.get("/user-open-pending-tickets", TicketController.getUserOpenAndPendingTickets);
 router.get("/recent-updates", TicketController.getRecentUpdates);
 
+router.get("/workspace", TicketController.getWorkspace);
+router.get("/company-logs", TicketController.getCompanyLogs);
+router.get("/message-notifications", TicketController.getUnreadMessageNotifications);
+
+router.get("/:ticketId/detail", TicketController.getTicketDetail);
+router.get("/:ticketId/messages", TicketController.getTicketMessages);
+router.post("/:ticketId/messages/read", TicketController.markMessagesAsRead);
+router.post("/:ticketId/messages", TicketController.sendMessage);
+router.post("/:ticketId/accept", TicketController.acceptTicket);
+router.patch("/:ticketId/status", TicketController.updateStatus);
+router.patch("/:ticketId/assignment", TicketController.updateAssignment);
+router.get("/:ticketId/logs", TicketController.getTicketLogs);
+router.get("/:ticketId/events/stream", TicketController.streamTicketEvents);
+
 export default { alias: "/api/tickets", router };
