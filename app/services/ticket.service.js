@@ -23,6 +23,13 @@ const USER_TYPES = Object.freeze({
   EMPRESA: "empresa",
 });
 
+const normalizeUserType = (value = "") =>
+  String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase();
+
 const BOT_AGENT = Object.freeze({
   name: "Resolve Assist",
   description: "Assistente virtual responsável pelo primeiro atendimento do ticket. Enquanto o chamado estiver aberto, o usuário será atendido inicialmente pela IA. Se necessário, um atendente humano assumirá a conversa no mesmo chat.",
@@ -257,7 +264,9 @@ const getSupportContext = async (authUser) => {
     return { error: { status: 401, message: "Usuário não autenticado" } };
   }
 
-  if (authUser.userType === USER_TYPES.CLIENTE) {
+  const normalizedUserType = normalizeUserType(authUser.userType);
+
+  if (normalizedUserType === USER_TYPES.CLIENTE) {
     return {
       scope: "customer",
       viewerType: TICKET_VIEWER_TYPE.CUSTOMER,
@@ -279,7 +288,7 @@ const getSupportContext = async (authUser) => {
     };
   }
 
-  if (authUser.userType === USER_TYPES.FUNCIONARIO && authUser.companyId) {
+  if (normalizedUserType === USER_TYPES.FUNCIONARIO && authUser.companyId) {
     const employeeCompany = await companyRepository.getById(authUser.companyId);
 
     return {
@@ -1015,7 +1024,7 @@ const resolveAssignableEmployee = async ({
   const targetUserId =
     assignedUserId !== null && assignedUserId !== undefined && assignedUserId !== ""
       ? Number(assignedUserId)
-      : fallbackUser?.userType === USER_TYPES.FUNCIONARIO
+      : normalizeUserType(fallbackUser?.userType) === USER_TYPES.FUNCIONARIO
         ? Number(fallbackUser.id)
         : null;
 
@@ -1025,7 +1034,10 @@ const resolveAssignableEmployee = async ({
 
   if (!employee) return { error: { status: 404, message: "Funcionario não encontrado." } };
 
-  if (employee.userType !== USER_TYPES.FUNCIONARIO || Number(employee.companyId) !== Number(companyId)) {
+  if (
+    normalizeUserType(employee.userType) !== USER_TYPES.FUNCIONARIO ||
+    Number(employee.companyId) !== Number(companyId)
+  ) {
     return {
       error: {
         status: 400,
