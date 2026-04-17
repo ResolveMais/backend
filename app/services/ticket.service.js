@@ -81,6 +81,7 @@ const formatUserSummary = (user) => {
     name: plainUser.name,
     email: plainUser.email,
     phone: plainUser.phone || null,
+    avatarUrl: plainUser.avatarUrl || null,
     jobTitle: plainUser.jobTitle || null,
     userType: plainUser.userType || null,
   };
@@ -207,6 +208,7 @@ const formatMessage = (message) => {
       senderUser: plainMessage.senderUser,
     }),
     senderUserId: plainMessage.senderUserId || plainMessage.sender_user_id || null,
+    senderUser: formatUserSummary(plainMessage.senderUser),
     messageType: plainMessage.messageType || plainMessage.message_type || "chat",
     customerReadAt: plainMessage.customerReadAt || plainMessage.customer_read_at || null,
     companyReadAt: plainMessage.companyReadAt || plainMessage.company_read_at || null,
@@ -988,6 +990,11 @@ const sendTicketMessage = async (authUser, ticketId, content) => {
       companyReadAt: shouldMarkCompanyRead ? now : null,
     });
 
+    const formattedCreatedMessage = formatMessage({
+      ...toPlain(createdMessage),
+      senderUser: context.user,
+    });
+
     const createdLog = await ticketRepository.createUpdate({
       ticketId,
       message: context.scope === "customer" ? `${context.user.name} enviou uma nova mensagem` : `${context.user.name} respondeu ao ticket`,
@@ -998,7 +1005,7 @@ const sendTicketMessage = async (authUser, ticketId, content) => {
 
     broadcastTicketEvent(ticketId, "message_created", {
       ticketId: Number(ticketId),
-      message: formatMessage(createdMessage),
+      message: formattedCreatedMessage,
     });
     broadcastTicketEvent(ticketId, "log_created", {
       ticketId: Number(ticketId),
@@ -1008,7 +1015,7 @@ const sendTicketMessage = async (authUser, ticketId, content) => {
     return {
       status: 201,
       message: "Mensagem enviada com sucesso.",
-      chatMessage: formatMessage(createdMessage),
+      chatMessage: formattedCreatedMessage,
     };
   } catch (error) {
     console.error("Erro ao enviar mensagem do ticket:", error);

@@ -30,7 +30,7 @@ const chatMessageAttributes = [
   "createdAt",
 ];
 
-const senderUserAttributes = ["id", "name", "email", "userType", "jobTitle"];
+const senderUserAttributes = ["id", "name", "email", "userType", "jobTitle", "avatarUrl"];
 const ticketSummaryAttributes = [
   "id",
   "description",
@@ -152,12 +152,23 @@ const getMessagesByConversationId = async ({
   order = "ASC",
 }) => {
   const attributes = await getChatMessageAttributes();
+  const hasSenderUserId = await hasColumnForAttribute(ChatMessage, "senderUserId");
   const query = {
     attributes,
     where: {
       conversation_id: conversationId,
       del: false,
     },
+    include: hasSenderUserId
+      ? [
+        {
+          model: User,
+          as: "senderUser",
+          attributes: await getSenderUserAttributes(),
+          required: false,
+        },
+      ]
+      : [],
     order: [["createdAt", order]],
   };
 

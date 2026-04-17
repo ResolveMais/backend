@@ -33,8 +33,8 @@ const baseTicketAttributes = [
   "assignedUserId",
 ];
 
-const baseUserAttributes = ["id", "name", "email", "phone", "cpf", "userType"];
-const supportUserAttributes = ["id", "name", "email", "phone", "jobTitle", "userType"];
+const baseUserAttributes = ["id", "name", "email", "phone", "cpf", "userType", "avatarUrl"];
+const supportUserAttributes = ["id", "name", "email", "phone", "jobTitle", "userType", "avatarUrl"];
 const baseTicketUpdateAttributes = ["id", "message", "type", "actorUserId", "statusFrom", "statusTo", "details", "createdAt"];
 
 const getTicketAttributes = async () => filterAttributesBySchema(TicketModel, baseTicketAttributes);
