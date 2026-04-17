@@ -19,7 +19,7 @@ const { sequelize } = db;
 
 const USER_TYPES = Object.freeze({
   CLIENTE: "cliente",
-  FUNCIONARIO: "funcionário",
+  FUNCIONARIO: "funcionario",
   EMPRESA: "empresa",
 });
 
