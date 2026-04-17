@@ -30,6 +30,7 @@ const TICKET_LOG_TYPE = Object.freeze({
   CLOSURE: "closure",
   REOPENED: "reopened",
   AUTOMATION: "automation",
+  EVALUATION: "evaluation",
 });
 
 const LEGACY_TICKET_LOG_TYPES = Object.freeze([
@@ -91,6 +92,7 @@ const normalizeTicketLogTypeForPersistence = (type) => {
     [
       TICKET_LOG_TYPE.RESOLUTION,
       TICKET_LOG_TYPE.REOPENED,
+      TICKET_LOG_TYPE.EVALUATION,
     ].includes(normalizedType)
   ) {
     return TICKET_LOG_TYPE.STATUS_CHANGE;

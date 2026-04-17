@@ -23,6 +23,11 @@ const USER_TYPES = Object.freeze({
   EMPRESA: "empresa",
 });
 
+const TICKET_RESOLUTION_SOURCE = Object.freeze({
+  CHATBOT: "chatbot",
+  HUMAN: "human",
+});
+
 const normalizeUserType = (value = "") =>
   String(value || "")
     .normalize("NFD")
@@ -87,6 +92,40 @@ const formatUserSummary = (user) => {
   };
 };
 
+const getTicketEvaluation = (ticket) => {
+  const plainTicket = toPlain(ticket);
+  if (!plainTicket) return null;
+
+  const rating = Number(plainTicket.customerRating || plainTicket.customer_rating || 0);
+  const submittedAt =
+    plainTicket.customerEvaluatedAt || plainTicket.customer_evaluated_at || null;
+  const resolutionSource = (() => {
+    const explicitResolutionSource =
+      plainTicket.resolutionSource || plainTicket.resolution_source || null;
+
+    if (explicitResolutionSource) return explicitResolutionSource;
+
+    return plainTicket.assignedUserId ||
+      plainTicket.assigned_user_id ||
+      plainTicket.acceptedAt ||
+      plainTicket.accepted_at
+      ? TICKET_RESOLUTION_SOURCE.HUMAN
+      : TICKET_RESOLUTION_SOURCE.CHATBOT;
+  })();
+  const normalizedStatus = normalizeTicketStatus(plainTicket.status);
+
+  return {
+    rating: rating > 0 ? rating : null,
+    comment:
+      plainTicket.customerFeedback || plainTicket.customer_feedback || null,
+    submittedAt,
+    resolutionSource,
+    pending:
+      normalizedStatus === TICKET_STATUS.RESOLVIDO &&
+      !submittedAt,
+  };
+};
+
 const isTicketAssignedToUser = (ticket, userId) => {
   const plainTicket = toPlain(ticket);
   const assignedUserId =
@@ -123,6 +162,7 @@ const buildTicketPermissions = (ticket, context) => {
   const isCompanyAdmin = context.scope === "company_admin";
   const isAssignedEmployee = isTicketAssignedToUser(ticket, context.user.id);
   const canEmployeeAct = isEmployee && (!ticket.assignedUserId || isAssignedEmployee);
+  const hasCustomerEvaluation = Boolean(ticket.customerEvaluatedAt || ticket.customer_evaluated_at);
 
   return {
     canUseChatbot: isCustomer && normalizedStatus === TICKET_STATUS.ABERTO,
@@ -139,13 +179,19 @@ const buildTicketPermissions = (ticket, context) => {
     canResolveByCustomer:
       isCustomer && normalizedStatus === TICKET_STATUS.ABERTO,
     canClose:
-      isCustomer && normalizedStatus === TICKET_STATUS.RESOLVIDO,
+      isCustomer &&
+      normalizedStatus === TICKET_STATUS.RESOLVIDO &&
+      hasCustomerEvaluation,
     canReopen:
       isCustomer &&
       [
         TICKET_STATUS.RESOLVIDO,
         TICKET_STATUS.FECHADO,
       ].includes(normalizedStatus),
+    canSubmitEvaluation:
+      isCustomer &&
+      normalizedStatus === TICKET_STATUS.RESOLVIDO &&
+      !hasCustomerEvaluation,
   };
 };
 
@@ -187,6 +233,7 @@ const formatTicket = (ticket, context = null) => {
       : null,
     customer: formatUserSummary(plainTicket.cliente),
     assignedEmployee: formatUserSummary(plainTicket.assignedEmployee),
+    evaluation: getTicketEvaluation(plainTicket),
     permissions: context ? buildTicketPermissions(plainTicket, context) : null,
   };
 };
@@ -1323,12 +1370,22 @@ const updateTicketStatus = async (authUser, ticketId, requestedStatus) => {
     if (context.scope === "customer") {
       if (currentStatus === TICKET_STATUS.ABERTO && nextStatus === TICKET_STATUS.RESOLVIDO) {
         updatePayload.resolvedAt = now;
+        updatePayload.resolutionSource = TICKET_RESOLUTION_SOURCE.CHATBOT;
+        updatePayload.customerRating = null;
+        updatePayload.customerFeedback = null;
+        updatePayload.customerEvaluatedAt = null;
         systemMessageText = "O cliente informou que o chatbot conseguiu resolver o problema.";
         logType = TICKET_LOG_TYPE.RESOLUTION;
       } else if (
         currentStatus === TICKET_STATUS.RESOLVIDO &&
         nextStatus === TICKET_STATUS.FECHADO
       ) {
+        if (!ticket.customerEvaluatedAt && !ticket.customer_evaluated_at) {
+          return {
+            status: 400,
+            message: "Envie a avaliação do atendimento antes de encerrar o ticket.",
+          };
+        }
         updatePayload.closedAt = now;
         systemMessageText = "O cliente encerrou o ticket.";
         logType = TICKET_LOG_TYPE.CLOSURE;
@@ -1344,6 +1401,10 @@ const updateTicketStatus = async (authUser, ticketId, requestedStatus) => {
         updatePayload.closedAt = null;
         updatePayload.resolvedAt = null;
         updatePayload.autoClosedAt = null;
+        updatePayload.resolutionSource = null;
+        updatePayload.customerRating = null;
+        updatePayload.customerFeedback = null;
+        updatePayload.customerEvaluatedAt = null;
         systemMessageText = "O cliente reabriu o ticket.";
         logType = TICKET_LOG_TYPE.REOPENED;
       } else {
@@ -1370,6 +1431,10 @@ const updateTicketStatus = async (authUser, ticketId, requestedStatus) => {
         nextStatus === TICKET_STATUS.RESOLVIDO
       ) {
         updatePayload.resolvedAt = now;
+        updatePayload.resolutionSource = TICKET_RESOLUTION_SOURCE.HUMAN;
+        updatePayload.customerRating = null;
+        updatePayload.customerFeedback = null;
+        updatePayload.customerEvaluatedAt = null;
         systemMessageText = `${context.user.name} marcou o ticket como resolvido.`;
         logType = TICKET_LOG_TYPE.RESOLUTION;
       } else {
@@ -1428,6 +1493,101 @@ const updateTicketStatus = async (authUser, ticketId, requestedStatus) => {
   } catch (error) {
     console.error("Erro ao atualizar status do ticket:", error);
     return { status: 500, message: "Erro ao atualizar status do ticket." };
+  }
+};
+
+const submitTicketEvaluation = async (
+  authUser,
+  ticketId,
+  { rating, comment = "" } = {}
+) => {
+  try {
+    const context = await getSupportContext(authUser);
+    if (context.error) return context.error;
+
+    if (context.scope !== "customer") {
+      return {
+        status: 403,
+        message: "Somente o cliente pode avaliar o atendimento.",
+      };
+    }
+
+    const ticketResponse = await getTicketForContext({ ticketId, context });
+    if (ticketResponse.error) return ticketResponse.error;
+
+    const ticket = toPlain(ticketResponse.ticket);
+    const normalizedStatus = normalizeTicketStatus(ticket.status);
+    const parsedRating = Number(rating);
+    const normalizedComment = String(comment || "").trim();
+    const resolutionSource = getTicketEvaluation(ticket)?.resolutionSource || null;
+
+    if (
+      !Number.isInteger(parsedRating) ||
+      parsedRating < 1 ||
+      parsedRating > 5
+    ) {
+      return {
+        status: 400,
+        message: "A nota da avaliação deve ser um número entre 1 e 5.",
+      };
+    }
+
+    if (normalizedStatus !== TICKET_STATUS.RESOLVIDO) {
+      return {
+        status: 400,
+        message: "A avaliação só pode ser enviada quando o ticket estiver resolvido.",
+      };
+    }
+
+    if (ticket.customerEvaluatedAt || ticket.customer_evaluated_at) {
+      return {
+        status: 400,
+        message: "A avaliação deste ticket já foi registrada.",
+      };
+    }
+
+    const now = new Date();
+
+    await ticketRepository.updateTicketById(ticketId, {
+      customerRating: parsedRating,
+      customerFeedback: normalizedComment || null,
+      customerEvaluatedAt: now,
+      updatedAt: now,
+      lastInteractionAt: now,
+    });
+
+    const evaluationLog = await ticketRepository.createUpdate({
+      ticketId,
+      message: `Cliente avaliou o atendimento com ${parsedRating} estrela${parsedRating > 1 ? "s" : ""}.`,
+      type: TICKET_LOG_TYPE.EVALUATION,
+      actorUserId: context.user.id,
+      details: {
+        rating: parsedRating,
+        comment: normalizedComment || null,
+        resolutionSource,
+      },
+    });
+
+    const updatedTicketResponse = await getTicketForContext({ ticketId, context });
+    const formattedTicket = formatTicket(updatedTicketResponse.ticket, context);
+
+    broadcastTicketEvent(ticketId, "ticket_updated", {
+      ticketId: Number(ticketId),
+      ticket: formattedTicket,
+    });
+    broadcastTicketEvent(ticketId, "log_created", {
+      ticketId: Number(ticketId),
+      log: formatLog(evaluationLog),
+    });
+
+    return {
+      status: 200,
+      message: "Avaliação registrada com sucesso.",
+      ticket: formattedTicket,
+    };
+  } catch (error) {
+    console.error("Erro ao registrar avaliação do ticket:", error);
+    return { status: 500, message: "Erro ao registrar avaliação." };
   }
 };
 
@@ -1576,6 +1736,7 @@ const ticketService = {
   markTicketMessagesAsRead,
   runTicketAutomationCycle,
   sendTicketMessage,
+  submitTicketEvaluation,
   updateTicketAssignment,
   updateTicketStatus,
 };

@@ -63,6 +63,26 @@ const initTicketModel = (sequelize, Sequelize) => {
         allowNull: true,
         field: "auto_closed_at",
       },
+      resolutionSource: {
+        type: Sequelize.STRING(30),
+        allowNull: true,
+        field: "resolution_source",
+      },
+      customerRating: {
+        type: Sequelize.INTEGER,
+        allowNull: true,
+        field: "customer_rating",
+      },
+      customerFeedback: {
+        type: Sequelize.TEXT,
+        allowNull: true,
+        field: "customer_feedback",
+      },
+      customerEvaluatedAt: {
+        type: Sequelize.DATE,
+        allowNull: true,
+        field: "customer_evaluated_at",
+      },
     },
     {
       tableName: "Ticket",

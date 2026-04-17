@@ -82,6 +82,14 @@ const updateStatus = async (req, res) => {
   return res.status(response.status).json(response);
 };
 
+const submitEvaluation = async (req, res) => {
+  const response = await ticketService.submitTicketEvaluation(req.user, req.params.ticketId, {
+    rating: req.body?.rating,
+    comment: req.body?.comment,
+  });
+  return res.status(response.status).json(response);
+};
+
 const updateAssignment = async (req, res) => {
   const response = await ticketService.updateTicketAssignment(req.user, req.params.ticketId, req.body?.assignedUserId ?? null);
   return res.status(response.status).json(response);
@@ -140,6 +148,7 @@ const TicketController = {
   getWorkspace,
   markMessagesAsRead,
   sendMessage,
+  submitEvaluation,
   streamTicketEvents,
   updateAssignment,
   updateStatus,

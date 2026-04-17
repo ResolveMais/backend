@@ -73,6 +73,10 @@ const ensureApplicationSchema = async ({ sequelize, models }) => {
         "reopenedAt",
         "lastInteractionAt",
         "autoClosedAt",
+        "resolutionSource",
+        "customerRating",
+        "customerFeedback",
+        "customerEvaluatedAt",
       ],
     },
     {

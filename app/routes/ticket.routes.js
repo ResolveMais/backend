@@ -24,6 +24,7 @@ router.post("/:ticketId/messages/read", TicketController.markMessagesAsRead);
 router.post("/:ticketId/messages", TicketController.sendMessage);
 router.post("/:ticketId/accept", TicketController.acceptTicket);
 router.patch("/:ticketId/status", TicketController.updateStatus);
+router.post("/:ticketId/evaluation", TicketController.submitEvaluation);
 router.patch("/:ticketId/assignment", TicketController.updateAssignment);
 router.get("/:ticketId/logs", TicketController.getTicketLogs);
 router.get("/:ticketId/events/stream", TicketController.streamTicketEvents);

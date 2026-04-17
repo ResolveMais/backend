@@ -30,6 +30,10 @@ const baseTicketAttributes = [
   "reopenedAt",
   "lastInteractionAt",
   "autoClosedAt",
+  "resolutionSource",
+  "customerRating",
+  "customerFeedback",
+  "customerEvaluatedAt",
   "assignedUserId",
 ];
 
