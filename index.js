@@ -26,10 +26,8 @@ app.get("/", (req, res) => {
 const startTicketAutomation = () => {
   if (!Number.isFinite(automationIntervalMs) || automationIntervalMs <= 0) return;
 
-  // Executar o ciclo de automação de tickets imediatamente ao iniciar o servidor
   setInterval(async () => {
     try {
-      // Executar o ciclo de automação de tickets e aguardar sua conclusão antes de iniciar o próximo ciclo
       await ticketService.runTicketAutomationCycle();
     } catch (error) {
       console.error("Ticket automation cycle failed:", error);
@@ -39,13 +37,8 @@ const startTicketAutomation = () => {
 
 const startServer = async () => {
   try {
-    // Garantir que a inicialização do banco de dados seja concluída antes de iniciar o servidor
     await databaseReady;
-
-    // Iniciar o servidor somente após a confirmação de que o banco de dados está pronto
     app.listen(port, () => console.log(`Server is running on port ${port}`));
-
-    // Iniciar a automação de tickets após o servidor estar rodando
     startTicketAutomation();
   } catch (error) {
     console.error("Server startup aborted due to database initialization failure:", error);
@@ -53,5 +46,19 @@ const startServer = async () => {
   }
 };
 
-// Iniciar o servidor
-startServer();
+// ==============================================
+// 👇 1. ADICIONAR: Exportar o app para os testes
+// ==============================================
+export default app;
+
+// ==============================================
+// 👇 2. MODIFICAR: Só inicia o servidor se NÃO for teste
+// ==============================================
+if (process.env.NODE_ENV !== 'test') {
+  startServer();
+}
+
+// ==============================================
+// 👇 3. ADICIONAR (opcional): Função para testes iniciarem manualmente
+// ==============================================
+export const startServerForTest = startServer;
