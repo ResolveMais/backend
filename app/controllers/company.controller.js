@@ -10,6 +10,16 @@ const getAll = async (req, res) => {
   }
 };
 
+const getPublicDashboard = async (req, res) => {
+  try {
+    const response = await companyService.getPublicCompanyDashboard(req.params.companyId);
+    return res.status(response.status).json(response);
+  } catch (error) {
+    console.error("Error fetching public company dashboard: " + error);
+    return res.status(500).json({ status: 500, message: "Internal server error" });
+  }
+};
+
 const getMyCompanyAdmins = async (req, res) => {
   try {
     const response = await companyService.getMyCompanyAdmins(req.user.id);
@@ -142,6 +152,7 @@ export {
   addMyCompanyComplaintTitle,
   addMyCompanyEmployee,
   getAll,
+  getPublicDashboard,
   getMyCompanyAdmins,
   getMyCompanyComplaintTitles,
   getMyCompanyEmployees,
@@ -155,6 +166,7 @@ export {
 
 export default {
   getAll,
+  getPublicDashboard,
   getMyCompanyAdmins,
   getMyCompanyEmployees,
   getMyCompanyComplaintTitles,

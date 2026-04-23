@@ -1,6 +1,8 @@
 import bcrypt from "bcrypt";
 import companyRepository from "../repositories/company.repository.js";
+import ticketRepository from "../repositories/ticket.repository.js";
 import userRepository from "../repositories/user.repository.js";
+import { TICKET_STATUS, normalizeTicketStatus } from "../utils/ticketStatus.js";
 import db from "../models/index.js";
 
 const { sequelize } = db;
@@ -13,6 +15,8 @@ const USER_TYPES = Object.freeze({
 
 const normalizeDigits = (value = "") => String(value).replace(/\D/g, "");
 const normalizeText = (value = "") => String(value).trim();
+const toPlain = (value) =>
+  value && typeof value.get === "function" ? value.get({ plain: true }) : value;
 
 const formatCompanySnapshot = (company) => ({
   id: company.id,
@@ -52,6 +56,87 @@ const formatComplaintTitleResponse = (complaintTitle) => ({
   description: complaintTitle.description || "",
 });
 
+const getCustomerInitials = (name) => {
+  const normalizedName = normalizeText(name);
+  if (!normalizedName) return "CL";
+
+  const parts = normalizedName.split(/\s+/).filter(Boolean);
+
+  if (parts.length === 1) {
+    return parts[0].slice(0, 2).toUpperCase();
+  }
+
+  return `${parts[0].charAt(0)}${parts[parts.length - 1].charAt(0)}`.toUpperCase();
+};
+
+const getPublicReviewerLabel = (customer) =>
+  customer?.name ? `Cliente ${getCustomerInitials(customer.name)}` : "Cliente";
+
+const getTrustLevel = ({ averageRating, ratingCount }) => {
+  if (!ratingCount || !averageRating) {
+    return {
+      label: "Sem avaliações suficientes",
+      tone: "neutral",
+    };
+  }
+
+  if (averageRating >= 4.5 && ratingCount >= 5) {
+    return {
+      label: "Alta confiabilidade",
+      tone: "success",
+    };
+  }
+
+  if (averageRating >= 4) {
+    return {
+      label: "Boa confiabilidade",
+      tone: "success",
+    };
+  }
+
+  if (averageRating >= 3) {
+    return {
+      label: "Confiabilidade moderada",
+      tone: "warning",
+    };
+  }
+
+  return {
+    label: "Confiabilidade baixa",
+    tone: "danger",
+  };
+};
+
+const buildEvaluationHighlights = (tickets) => {
+  const ratedTickets = tickets.filter((ticket) => Number(ticket.customerRating || 0) > 0);
+  const withComment = ratedTickets.filter((ticket) => normalizeText(ticket.customerFeedback || "").length > 0);
+  const withoutComment = ratedTickets.filter((ticket) => normalizeText(ticket.customerFeedback || "").length === 0);
+  const sortByRelevance = (left, right) => {
+    const leftSubmittedAt = new Date(left.customerEvaluatedAt || left.updatedAt || left.createdAt || 0).getTime();
+    const rightSubmittedAt = new Date(right.customerEvaluatedAt || right.updatedAt || right.createdAt || 0).getTime();
+    const leftRelevance = Math.abs(Number(left.customerRating || 0) - 3);
+    const rightRelevance = Math.abs(Number(right.customerRating || 0) - 3);
+
+    if (rightRelevance !== leftRelevance) {
+      return rightRelevance - leftRelevance;
+    }
+
+    return rightSubmittedAt - leftSubmittedAt;
+  };
+
+  return [...withComment.sort(sortByRelevance), ...withoutComment.sort(sortByRelevance)]
+    .slice(0, 6)
+    .map((ticket) => ({
+      ticketId: ticket.id,
+      rating: Number(ticket.customerRating || 0),
+      comment: normalizeText(ticket.customerFeedback || "") || null,
+      submittedAt: ticket.customerEvaluatedAt || null,
+      resolutionSource: ticket.resolutionSource || null,
+      reviewerLabel: getPublicReviewerLabel(ticket.cliente),
+      complaintTitle: ticket.tituloReclamacao?.title || "Sem assunto",
+    }));
+};
+
 const getCompanyFromAdminUser = async (userId) => {
   const company = await companyRepository.getByAdminUserId(userId);
   return company || null;
@@ -84,6 +169,78 @@ const getCompanyDataForAdmin = async (authUserId) => {
 const getAllCompanies = async () => {
   const companies = await companyRepository.getAll();
   return { status: 200, result: companies };
+};
+
+const getPublicCompanyDashboard = async (companyId) => {
+  const parsedCompanyId = Number(companyId);
+
+  if (!Number.isInteger(parsedCompanyId) || parsedCompanyId <= 0) {
+    return { status: 400, message: "ID da empresa inválido" };
+  }
+
+  const company = await companyRepository.getById(parsedCompanyId);
+
+  if (!company) {
+    return { status: 404, message: "Empresa não encontrada" };
+  }
+
+  const rawTickets = await ticketRepository.listByCompanyId({ companyId: parsedCompanyId });
+  const tickets = rawTickets.map((ticket) => toPlain(ticket));
+
+  const openTickets = tickets.filter(
+    (ticket) => normalizeTicketStatus(ticket.status) === TICKET_STATUS.ABERTO
+  ).length;
+  const inProgressTickets = tickets.filter(
+    (ticket) => normalizeTicketStatus(ticket.status) === TICKET_STATUS.PENDENTE
+  ).length;
+  const resolvedTickets = tickets.filter(
+    (ticket) => normalizeTicketStatus(ticket.status) === TICKET_STATUS.RESOLVIDO
+  ).length;
+  const closedTickets = tickets.filter(
+    (ticket) => normalizeTicketStatus(ticket.status) === TICKET_STATUS.FECHADO
+  ).length;
+  const ratedTickets = tickets.filter((ticket) => Number(ticket.customerRating || 0) > 0);
+  const totalRatings = ratedTickets.length;
+  const averageRating =
+    totalRatings > 0
+      ? Number(
+          (
+            ratedTickets.reduce(
+              (accumulator, ticket) => accumulator + Number(ticket.customerRating || 0),
+              0
+            ) / totalRatings
+          ).toFixed(1)
+        )
+      : null;
+  const ratingDistribution = {
+    1: ratedTickets.filter((ticket) => Number(ticket.customerRating) === 1).length,
+    2: ratedTickets.filter((ticket) => Number(ticket.customerRating) === 2).length,
+    3: ratedTickets.filter((ticket) => Number(ticket.customerRating) === 3).length,
+    4: ratedTickets.filter((ticket) => Number(ticket.customerRating) === 4).length,
+    5: ratedTickets.filter((ticket) => Number(ticket.customerRating) === 5).length,
+  };
+  const trustLevel = getTrustLevel({
+    averageRating,
+    ratingCount: totalRatings,
+  });
+
+  return {
+    status: 200,
+    company: formatCompanySnapshot(toPlain(company)),
+    summary: {
+      totalTickets: tickets.length,
+      openTickets,
+      inProgressTickets,
+      resolvedTickets,
+      closedTickets,
+      resolvedOrClosedTickets: resolvedTickets + closedTickets,
+      averageRating,
+      totalRatings,
+      ratingDistribution,
+      trustLevel,
+    },
+    highlights: buildEvaluationHighlights(tickets),
+  };
 };
 
 const getMyCompanyAdmins = async (authUserId) => {
@@ -178,15 +335,15 @@ const addMyCompanyComplaintTitle = async (authUserId, payload) => {
   const description = normalizeText(payload?.description || "");
 
   if (!title) {
-    return { status: 400, message: "O assunto da reclamacao nao pode ficar vazio" };
+    return { status: 400, message: "O assunto da reclamação não pode ficar vazio" };
   }
 
   if (title.length > 100) {
-    return { status: 400, message: "O assunto da reclamacao deve ter no maximo 100 caracteres" };
+    return { status: 400, message: "O assunto da reclamação deve ter no máximo 100 caracteres" };
   }
 
   if (description.length > 255) {
-    return { status: 400, message: "A descricao do assunto deve ter no maximo 255 caracteres" };
+    return { status: 400, message: "A descrição do assunto deve ter no máximo 255 caracteres" };
   }
 
   const currentComplaintTitles = await companyRepository.listComplaintTitles(context.company.id);
@@ -195,7 +352,7 @@ const addMyCompanyComplaintTitle = async (authUserId, payload) => {
   );
 
   if (duplicatedComplaintTitle) {
-    return { status: 400, message: "Ja existe um assunto com esse nome para a empresa" };
+    return { status: 400, message: "Já existe um assunto com esse nome para a empresa" };
   }
 
   await companyRepository.createComplaintTitle({
@@ -223,13 +380,13 @@ const removeMyCompanyComplaintTitle = async (authUserId, complaintTitleId) => {
   const parsedComplaintTitleId = Number(complaintTitleId);
 
   if (!Number.isInteger(parsedComplaintTitleId) || parsedComplaintTitleId <= 0) {
-    return { status: 400, message: "Assunto de reclamacao invalido" };
+    return { status: 400, message: "Assunto de reclamação inválido" };
   }
 
   const complaintTitle = await companyRepository.getComplaintTitleById(parsedComplaintTitleId);
 
   if (!complaintTitle || Number(complaintTitle.company_id) !== Number(context.company.id)) {
-    return { status: 404, message: "Assunto de reclamacao nao encontrado para a empresa" };
+    return { status: 404, message: "Assunto de reclamação não encontrado para a empresa" };
   }
 
   const linkedTicketsCount = await companyRepository.countTicketsByComplaintTitle({
@@ -240,7 +397,7 @@ const removeMyCompanyComplaintTitle = async (authUserId, complaintTitleId) => {
   if (linkedTicketsCount > 0) {
     return {
       status: 400,
-      message: "Nao e possivel remover um assunto ja utilizado em tickets",
+      message: "Não é possível remover um assunto já utilizado em tickets",
     };
   }
 
@@ -600,6 +757,7 @@ export {
   addMyCompanyComplaintTitle,
   addMyCompanyEmployee,
   getAllCompanies,
+  getPublicCompanyDashboard,
   getMyCompanyAdmins,
   getMyCompanyComplaintTitles,
   getMyCompanyEmployees,
@@ -613,6 +771,7 @@ export {
 
 export default {
   getAllCompanies,
+  getPublicCompanyDashboard,
   getMyCompanyAdmins,
   getMyCompanyEmployees,
   getMyCompanyComplaintTitles,

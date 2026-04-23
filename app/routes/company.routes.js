@@ -5,6 +5,7 @@ import authMiddleware from "../middlewares/auth.middleware.js";
 const router = express.Router();
 
 router.get("/all", CompanyController.getAll);
+router.get("/:companyId/public-dashboard", CompanyController.getPublicDashboard);
 router.get("/my-company/admins", authMiddleware, CompanyController.getMyCompanyAdmins);
 router.get("/my-company/complaint-titles", authMiddleware, CompanyController.getMyCompanyComplaintTitles);
 router.patch("/my-company/profile", authMiddleware, CompanyController.updateMyCompanyProfile);
