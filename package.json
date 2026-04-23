@@ -46,6 +46,9 @@
     "supertest": "^7.2.2"
   },
   "jest": {
-    "transform": {}
+    "transform": {},
+    "setupFilesAfterEnv": [
+      "<rootDir>/jest.setup.js"
+    ]
   }
 }

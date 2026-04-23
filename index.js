@@ -5,7 +5,7 @@ import { routesController } from "./app/routes/index.js";
 import ticketService from "./app/services/ticket.service.js";
 import db from "./app/models/index.js";
 
-const { databaseReady } = db;
+const { initializeDatabase } = db;
 
 const app = express();
 const port = process.env.PORT || 3001;
@@ -37,7 +37,7 @@ const startTicketAutomation = () => {
 
 const startServer = async () => {
   try {
-    await databaseReady;
+    await initializeDatabase();
     app.listen(port, () => console.log(`Server is running on port ${port}`));
     startTicketAutomation();
   } catch (error) {

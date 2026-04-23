@@ -73,31 +73,52 @@ Object.values(db).forEach((model) => {
   }
 });
 
-const databaseReady = (async () => {
-  try {
-    await sequelize.authenticate();
-    console.log("Connection has been established successfully.");
+let databaseReady = null;
 
-    if (process.env.DB_SYNC_ON_BOOT === "true") {
-      const syncOptions =
-        process.env.DB_SYNC_ALTER === "true" ? { alter: true } : undefined;
-
-      console.log(
-        `DB_SYNC_ON_BOOT=true, running sequelize.sync(${syncOptions ? "alter" : "default"})`
-      );
-
-      await sequelize.sync(syncOptions);
-      await ensureApplicationSchema({ sequelize, models: db });
-      return;
-    }
-
-    console.log("Database sync skipped.");
-  } catch (err) {
-    console.log("Database connection is not working!", err);
-    throw err;
+const initializeDatabase = () => {
+  if (databaseReady) {
+    return databaseReady;
   }
-})();
 
-export { Sequelize, sequelize, databaseReady };
+  databaseReady = (async () => {
+    try {
+      await sequelize.authenticate();
+      console.log("Connection has been established successfully.");
+
+      if (process.env.DB_SYNC_ON_BOOT === "true") {
+        const syncOptions =
+          process.env.DB_SYNC_ALTER === "true" ? { alter: true } : undefined;
+
+        console.log(
+          `DB_SYNC_ON_BOOT=true, running sequelize.sync(${syncOptions ? "alter" : "default"})`
+        );
+
+        await sequelize.sync(syncOptions);
+        await ensureApplicationSchema({ sequelize, models: db });
+        return;
+      }
+
+      console.log("Database sync skipped.");
+    } catch (err) {
+      console.log("Database connection is not working!", err);
+      throw err;
+    }
+  })();
+
+  return databaseReady;
+};
+
+Object.defineProperties(db, {
+  databaseReady: {
+    enumerable: true,
+    get: () => databaseReady,
+  },
+  initializeDatabase: {
+    enumerable: true,
+    value: initializeDatabase,
+  },
+});
+
+export { Sequelize, sequelize, databaseReady, initializeDatabase };
 
 export default db;
