@@ -13,6 +13,8 @@ import {
 
 const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-4.1-nano";
 const MAX_HISTORY_MESSAGES = 20;
+const CHATBOT_UNAVAILABLE_FALLBACK_MESSAGE =
+  "No momento, o Resolve Assist está indisponível. Seu ticket já foi registrado e logo um atendente assumirá o atendimento neste mesmo chat.";
 
 const AGENT = Object.freeze(CHATBOT_AGENT);
 
@@ -205,10 +207,15 @@ const streamOpenAICompletion = async ({
     return fullAssistantResponse.trim();
   } catch (error) {
     const status = error?.status || error?.statusCode || 502;
-    const message =
-      error?.message || (typeof error === "string" ? error : "Erro ao consultar OpenAI.");
+    const message = error?.message || (typeof error === "string" ? error : "Erro ao consultar OpenAI.");
+    const wrappedError = createServiceError(`Erro ao consultar OpenAI: ${message}`.trim(), status);
 
-    throw createServiceError(`Erro ao consultar OpenAI: ${message}`.trim(), status);
+    if (fullAssistantResponse.trim()) {
+      wrappedError.partialResponse = fullAssistantResponse;
+      wrappedError.hasOutputToken = true;
+    }
+
+    throw wrappedError;
   }
 };
 
@@ -407,9 +414,6 @@ const streamMessage = async ({
     throw createServiceError("Mensagem obrigatoria.", 400);
   }
 
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) throw createServiceError("Variavel OPENAI_API_KEY não configurada no backend.", 500);
-
   const parsedTicketId = parseTicketId(ticketId);
   let ticket = null;
 
@@ -503,16 +507,42 @@ const streamMessage = async ({
     },
   ];
 
-  const assistantResponse = await streamOpenAICompletion({
-    model: OPENAI_MODEL,
-    apiKey,
-    messages: openAIMessages,
-    abortSignal,
-    onToken,
-  });
+  let assistantResponse = "";
+  let usedUnavailableFallback = false;
 
-  if (!assistantResponse) {
-    throw createServiceError("A IA não retornou resposta válida.", 502);
+  try {
+    const apiKey = process.env.OPENAI_API_KEY;
+
+    if (!apiKey) {
+      throw createServiceError(
+        "Variavel OPENAI_API_KEY não configurada no backend.",
+        503
+      );
+    }
+
+    assistantResponse = await streamOpenAICompletion({
+      model: OPENAI_MODEL,
+      apiKey,
+      messages: openAIMessages,
+      abortSignal,
+      onToken,
+    });
+
+    if (!assistantResponse) {
+      throw createServiceError("A IA não retornou resposta válida.", 502);
+    }
+  } catch (error) {
+    if (abortSignal?.aborted || error?.statusCode === 499) {
+      throw error;
+    }
+
+    if (error?.hasOutputToken) {
+      throw error;
+    }
+
+    assistantResponse = CHATBOT_UNAVAILABLE_FALLBACK_MESSAGE;
+    usedUnavailableFallback = true;
+    onToken(assistantResponse);
   }
 
   const assistantMessage = await chatbotRepository.createMessage({
@@ -528,10 +558,13 @@ const streamMessage = async ({
   if (parsedTicketId) {
     await ticketRepository.createUpdate({
       ticketId: parsedTicketId,
-      message: "O chatbot respondeu ao cliente",
+      message: usedUnavailableFallback
+        ? "O chatbot ficou indisponível e informou que o atendimento seguirá com a equipe humana."
+        : "O chatbot respondeu ao cliente",
       type: TICKET_LOG_TYPE.MESSAGE,
       details: {
         senderType: TICKET_MESSAGE_SENDER.BOT,
+        fallbackUsed: usedUnavailableFallback,
       },
     });
 
