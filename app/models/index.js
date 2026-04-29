@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { Sequelize } from "sequelize";
+import * as tedious from "tedious";
 import dbConfig from "../config/db.config.js";
 import { ensureApplicationSchema } from "../utils/schemaBootstrap.js";
 
@@ -11,6 +12,7 @@ const __dirname = path.dirname(__filename);
 const sequelize = new Sequelize(dbConfig.DB, dbConfig.USER, dbConfig.PASSWORD, {
   host: dbConfig.HOST,
   dialect: dbConfig.dialect,
+  dialectModule: tedious,
   port: dbConfig.PORT,
   logging: false,
   dialectOptions: {
