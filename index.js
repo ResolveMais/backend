@@ -11,7 +11,21 @@ const app = express();
 const port = process.env.PORT || 3001;
 const automationIntervalMs = Number(process.env.TICKET_AUTOMATION_INTERVAL_MS || 60000);
 
-app.use(cors());
+const alowedOrigins = process.env.CORS_ALLOWED_ORIGINS ? process.env.CORS_ALLOWED_ORIGINS.split(", ") : [];
+
+const corsOptions = {
+  origin: (origin, callback) => {
+    if (!origin || alowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+
+    callback(new Error("CORS blocked for origin: " + origin));
+  }
+};
+
+app.use(cors(corsOptions));
+app.options(/.*/, cors(corsOptions));
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static("public"));
