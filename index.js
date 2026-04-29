@@ -10,7 +10,7 @@ const { initializeDatabase } = db;
 const app = express();
 const port = process.env.PORT || 3001;
 const automationIntervalMs = Number(process.env.TICKET_AUTOMATION_INTERVAL_MS || 60000);
-const corsOriginsEnv = process.env.CORS_ALLOWED_ORIGINS || "";
+const corsOriginsEnv = process.env.CORS_ALLOWED_ORIGINS || process.env.ALLOWED_ORIGINS || "";
 const allowedOrigins = corsOriginsEnv
   .split(",")
   .map((origin) => origin.trim())
@@ -35,6 +35,15 @@ app.options(/.*/, cors(corsOptions));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static("public"));
+app.use(async (_req, res, next) => {
+  try {
+    await initializeDatabase();
+    next();
+  } catch (error) {
+    console.error("Database initialization failed during request:", error);
+    res.status(500).json({ message: "Database initialization failed." });
+  }
+});
 
 routesController(app);
 
@@ -70,6 +79,10 @@ const startServer = async () => {
 // 👇 1. ADICIONAR: Exportar o app para os testes
 // ==============================================
 export default app;
+export const prepareApp = async () => {
+  await initializeDatabase();
+  return app;
+};
 
 // ==============================================
 // 👇 2. MODIFICAR: Só inicia o servidor se NÃO for teste
