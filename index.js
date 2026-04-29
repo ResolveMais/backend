@@ -15,12 +15,15 @@ const alowedOrigins = process.env.CORS_ALLOWED_ORIGINS ? process.env.CORS_ALLOWE
 
 const corsOptions = {
   origin: (origin, callback) => {
-    if (!origin || alowedOrigins.includes(origin)) {
-      return callback(null, true);
-    }
+    if (!origin) return callback(null, true); // Permite Postman, health checks e chamadas sem origin
 
-    callback(new Error("CORS blocked for origin: " + origin));
-  }
+    if (allowedOrigins.includes(origin)) return callback(null, true); // Libera somente origens conhecidas
+
+    return callback(new Error(`CORS blocked for origin: ${origin}`)); // Mostra a origem bloqueada no log
+  },
+  credentials: true, // Necessário apenas se usa cookies/sessão
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"], // Libera métodos da API
+  allowedHeaders: ["Content-Type", "Authorization"], // Libera headers usados pelo front
 };
 
 app.use(cors(corsOptions));
