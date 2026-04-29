@@ -2,7 +2,7 @@
   "functions": {
     "api/index.js": {
       "maxDuration": 300,
-      "includeFiles": "node_modules/tedious/**/*"
+      "includeFiles": "{app/models/**/*.model.js,app/models/**,node_modules/tedious/**/*,public/**/*}"
     }
   },
   "routes": [
