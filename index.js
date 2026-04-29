@@ -10,8 +10,11 @@ const { initializeDatabase } = db;
 const app = express();
 const port = process.env.PORT || 3001;
 const automationIntervalMs = Number(process.env.TICKET_AUTOMATION_INTERVAL_MS || 60000);
-
-const alowedOrigins = process.env.CORS_ALLOWED_ORIGINS ? process.env.CORS_ALLOWED_ORIGINS.split(", ") : [];
+const corsOriginsEnv = process.env.CORS_ALLOWED_ORIGINS || "";
+const allowedOrigins = corsOriginsEnv
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
 
 const corsOptions = {
   origin: (origin, callback) => {
@@ -71,7 +74,7 @@ export default app;
 // ==============================================
 // 👇 2. MODIFICAR: Só inicia o servidor se NÃO for teste
 // ==============================================
-if (process.env.NODE_ENV !== 'test') {
+if (process.env.NODE_ENV !== "test" && !process.env.VERCEL) {
   startServer();
 }
 
