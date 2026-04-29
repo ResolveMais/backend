@@ -69,6 +69,8 @@ const db = {
   ...Object.fromEntries(modelEntries),
 };
 
+console.log("Models loaded:", Object.keys(db).filter((key) => key !== "Sequelize" && key !== "sequelize"));
+
 Object.values(db).forEach((model) => {
   if (typeof model?.associate === "function") {
     model.associate(db);
