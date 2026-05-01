@@ -1,60 +1,58 @@
 # Backend - Resolve Mais
 
-API REST do projeto `Resolve Mais`, construída com `Node.js`, `Express` e `Sequelize`, usando `SQL Server` como banco de dados.
-
-## O que este repositório faz
-
-- autenticação de usuários com JWT
-- cadastro e login
-- validação de sessão
-- atualização de perfil
-- listagem de empresas e assuntos
-- criação e consulta de tickets
+API REST do projeto **Resolve Mais**, construída com `Node.js`, `Express`, `Sequelize` e `SQL Server`.
 
 ## Stack
 
 - `Node.js`
 - `Express`
 - `Sequelize`
-- `mssql` / `tedious`
+- `SQL Server`
+- `tedious`
 - `bcrypt`
 - `jsonwebtoken`
 - `dotenv`
+- `nodemailer`
+- `OpenAI`
 
-## Estrutura
+## Pré-requisitos
 
-```text
-backend/
-|-- app/
-|   |-- config/
-|   |-- controllers/
-|   |-- middlewares/
-|   |-- models/
-|   |-- repositories/
-|   |-- routes/
-|   |-- services/
-|   `-- utils/
-|-- .env.example
-|-- index.js
-|-- package.json
-`-- README.md
+- `Node.js` 22 ou superior
+- `npm`
+- instância do `SQL Server` acessível
+- banco `resolve_mais` criado no SQL Server
+
+## Passo a passo para iniciar
+
+### 1. Entrar na pasta do backend
+
+```powershell
+cd backend
 ```
 
-## Requisitos
+### 2. Instalar as dependências
 
-- `Node.js` 22+
-- `npm`
-- `SQL Server` acessível
+```powershell
+npm install
+```
 
-## Variáveis de ambiente
+### 3. Criar o banco de dados
 
-Copie o arquivo de exemplo:
+Caso o banco ainda não exista, crie manualmente no SQL Server:
+
+```sql
+CREATE DATABASE resolve_mais;
+```
+
+### 4. Criar o arquivo de ambiente
 
 ```powershell
 Copy-Item .env.example .env
 ```
 
-Conteúdo esperado:
+### 5. Configurar o `.env`
+
+Exemplo de configuração local:
 
 ```env
 # DB
@@ -62,47 +60,56 @@ DB_HOST=localhost
 DB_PORT=1433
 DB_NAME=resolve_mais
 DB_USER=sa
-DB_PASS=[SENHA]
+DB_PASS=sua_senha
+
+# DB bootstrap
+DB_SYNC_ON_BOOT=true
+# DB_SYNC_ALTER=false
 
 # JWT
 JWT_EXPIRATION=1d
+JWT_SECRET=secret_key_here
 ACCESS_TOKEN_SECRET=access_token_secret
 JWT_ALGORITHM=HS256
 
+# OPENAI
+OPENAI_API_KEY=sua_chave_openai
+OPENAI_MODEL=gpt-4.1-nano
+
 # SERVER
 PORT=3001
+CORS_ALLOWED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
+APP_URL=http://localhost:3000
 
-# Opcional: apenas se quiser sync automatico ao subir em desenvolvimento
-DB_SYNC_ON_BOOT=false
+# MAIL
+SMTP_HOST=
+SMTP_PORT=
+SMTP_USER=
+SMTP_PASS=
+SMTP_SECURE=false
+MAIL_FROM=
+
+# Opcional
+RESET_PASSWORD_EXPIRES_MINUTES=30
+TICKET_AUTOMATION_INTERVAL_MS=60000
 ```
 
-## Como rodar localmente
+### 6. Entender o `DB_SYNC_ON_BOOT`
 
-### 1. Instale as dependências
+- `DB_SYNC_ON_BOOT=true`: ao subir a API, o Sequelize autentica, cria/sincroniza as tabelas e executa o bootstrap do schema
+- `DB_SYNC_ON_BOOT=false`: a API apenas testa a conexão com o banco; se as tabelas ainda não existirem, a aplicação não ficará pronta para uso
 
-```powershell
-npm install
-```
+Para a primeira subida em ambiente local, o mais seguro é manter `DB_SYNC_ON_BOOT=true`.
 
-### 2. Configure o `.env`
-
-```powershell
-Copy-Item .env.example .env
-```
-
-### 3. Crie o banco manualmente
-
-```sql
-CREATE DATABASE resolve_mais;
-```
-
-### 4. Suba a API
+### 7. Iniciar a API
 
 ```powershell
 npm run dev
 ```
 
-A API ficará disponível em:
+### 8. Confirmar a porta da API
+
+Com a configuração padrão, a API sobe em:
 
 ```text
 http://localhost:3001
@@ -114,80 +121,61 @@ Se quiser rodar sem `nodemon`:
 npm start
 ```
 
-## Scripts
+## Ordem correta para subir o projeto completo
 
-- `npm run dev`: inicia em modo desenvolvimento com `nodemon`
-- `npm start`: inicia com `node index.js`
-- `npm test`: placeholder
+1. Inicie o SQL Server.
+2. Suba o backend com `npm run dev`.
+3. Suba o frontend.
+4. Acesse o frontend em `http://localhost:3000`.
 
-## Observação sobre sync automático
+## Variáveis importantes
 
-Por padrão, o projeto **não executa `sequelize.sync()`** automaticamente.
+### Obrigatórias para a API
 
-Se você quiser forçar sync automático ao subir (não recomendado em produção), use:
+- `DB_HOST`
+- `DB_PORT`
+- `DB_NAME`
+- `DB_USER`
+- `DB_PASS`
+- `ACCESS_TOKEN_SECRET`
+- `JWT_EXPIRATION`
+- `JWT_ALGORITHM`
+- `PORT`
 
-```env
-DB_SYNC_ON_BOOT=true
-```
+O token JWT usado pela aplicação é assinado com `ACCESS_TOKEN_SECRET`. O campo `JWT_SECRET` ainda aparece no `.env.example`, mas hoje não é o segredo utilizado no fluxo principal.
 
-## Rotas principais
+### Obrigatórias para integração local com o frontend
 
-### Autenticação - `/api/auth`
+- `APP_URL`
+- `CORS_ALLOWED_ORIGINS`
 
-- `POST /login`
-- `POST /register`
-- `GET /me`
+### Opcionais por funcionalidade
 
-#### Cadastro tipo empresa (`POST /register`)
+- `OPENAI_API_KEY` e `OPENAI_MODEL`: necessários para o chatbot
+- `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_SECURE`, `MAIL_FROM`: necessários para envio de e-mails
+- `RESET_PASSWORD_EXPIRES_MINUTES`: validade do link de redefinição de senha
+- `TICKET_AUTOMATION_INTERVAL_MS`: intervalo da automação de tickets
+- `DB_SYNC_ALTER`: usa `sequelize.sync({ alter: true })`
 
-Quando `userType = empresa`, o payload esperado é:
+## Scripts disponíveis
 
-```json
-{
-  "userType": "empresa",
-  "companyName": "Nome da Empresa",
-  "companyDescription": "Descricao da empresa",
-  "companyCnpj": "00.000.000/0000-00",
-  "adminUser": {
-    "name": "Nome do Admin",
-    "email": "admin@empresa.com",
-    "phone": "(11) 99999-9999",
-    "cpf": "000.000.000-00",
-    "password": "123456"
-  }
-}
-```
+- `npm run dev`: inicia a API com `nodemon`
+- `npm start`: inicia a API com `node index.js`
+- `npm test`: executa a suíte de testes
+- `npm run test:watch`: executa os testes em modo watch
+- `npm run test:coverage`: gera cobertura de testes
 
-A API cria automaticamente:
+## Rotas base da API
 
-1. a empresa (`Company`)
-2. o usuário administrador inicial (`User`)
-3. o vínculo de administrador (`CompanyAdmin` com `is_primary = true`)
+- `/api/auth`
+- `/api/chatbot`
+- `/api/companies`
+- `/api/tickets`
+- `/api/users`
 
-Observação: cadastro público de `funcionario` foi desabilitado.
-Funcionários só podem ser criados por administradores da empresa.
+## Observações importantes
 
-### Empresas - `/api/companies`
-
-- `GET /all`
-- `GET /my-company/admins` (autenticado)
-- `POST /my-company/admins` (autenticado)
-- `PATCH /my-company/admins/:adminUserId/primary` (autenticado)
-- `DELETE /my-company/admins/:adminUserId` (autenticado)
-- `GET /my-company/employees` (autenticado, admin)
-- `POST /my-company/employees` (autenticado, admin)
-- `DELETE /my-company/employees/:employeeUserId` (autenticado, admin)
-
-### Tickets - `/api/tickets`
-
-- `GET /companies`
-- `GET /complaint-titles/:companyId`
-- `GET /my-tickets`
-- `POST /create`
-- `GET /user-closed-tickets`
-- `GET /user-open-pending-tickets`
-- `GET /recent-updates`
-
-### Usuário - `/api/users`
-
-- `PATCH /update-profile`
+- O chatbot retorna erro de serviço se `OPENAI_API_KEY` não estiver configurada.
+- O fluxo de redefinição de senha depende de `APP_URL` e das variáveis SMTP.
+- O backend aplica CORS com base em `CORS_ALLOWED_ORIGINS` ou `ALLOWED_ORIGINS`.
+- A aplicação exporta o `app` para testes e só inicia o servidor automaticamente fora de `NODE_ENV=test` e fora do ambiente Vercel.
