@@ -148,8 +148,8 @@ const sendTicketPendingReplyEmail = async ({
   const safeWaitingFor = String(waitingFor || "").trim() || "uma resposta";
   const protocol = `3330${String(ticketId || "").padStart(4, "0")}`;
 
-  await getTransporter()
-    .sendMail({
+  try {
+    await getTransporter().sendMail({
       from: config.from,
       to,
       subject: `Nova mensagem aguardando resposta - Ticket ${protocol}`,
@@ -193,15 +193,13 @@ const sendTicketPendingReplyEmail = async ({
           </table>
         </div>
       `,
-    })
-    .then(() => {
-      console.log(`Ticket reminder email sent to ${to}`);
-    })
-    .catch((error) => {
-      console.error(`Error sending ticket reminder email to ${to}: ${error.message}`);
     });
-
-  return true;
+    console.log(`Ticket reminder email sent to ${to}`);
+    return true;
+  } catch (error) {
+    console.error(`Error sending ticket reminder email to ${to}: ${error.message}`);
+    return false;
+  }
 };
 
 export { isMailerConfigured, sendPasswordResetEmail, sendTicketPendingReplyEmail };
