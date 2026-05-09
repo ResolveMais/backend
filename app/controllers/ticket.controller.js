@@ -43,7 +43,9 @@ const getRecentUpdates = async (req, res) => {
 };
 
 const getWorkspace = async (req, res) => {
-  const response = await ticketService.getWorkspaceTickets(req.user, { scope: req.query?.scope || "active" });
+  const response = await ticketService.getWorkspaceTickets(req.user, {
+    scope: req.query?.scope || "active",
+  });
   return res.status(response.status).json(response);
 };
 

@@ -18,15 +18,15 @@ const allowedOrigins = corsOriginsEnv
 
 const corsOptions = {
   origin: (origin, callback) => {
-    if (!origin) return callback(null, true); // Permite Postman, health checks e chamadas sem origin
+    if (!origin) return callback(null, true);
 
-    if (allowedOrigins.includes(origin)) return callback(null, true); // Libera somente origens conhecidas
+    if (allowedOrigins.includes(origin)) return callback(null, true);
 
-    return callback(new Error(`CORS blocked for origin: ${origin}`)); // Mostra a origem bloqueada no log
+    return callback(new Error(`CORS blocked for origin: ${origin}`));
   },
-  credentials: true, // Necessário apenas se usa cookies/sessão
-  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"], // Libera métodos da API
-  allowedHeaders: ["Content-Type", "Authorization"], // Libera headers usados pelo front
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
 };
 
 app.use(cors(corsOptions));
