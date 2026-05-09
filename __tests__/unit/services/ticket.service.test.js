@@ -718,4 +718,72 @@ describe("app/services/ticket.service", () => {
       }
     );
   });
+
+  test("runTicketAutomationCycle keeps failed reminders pending and continues with the next messages", async () => {
+    const failedReminderMessage = {
+      id: 901,
+      senderType: "cliente",
+      senderName: "Maria",
+      conversation: {
+        ticket: {
+          id: 82,
+          company_id: 22,
+          empresa: { id: 22, name: "Resolve Mais" },
+          tituloReclamacao: { title: "Entrega" },
+          cliente: {
+            id: 4,
+            name: "Maria",
+            email: "maria@example.com",
+          },
+          assignedEmployee: {
+            id: 55,
+            name: "Atendente A",
+            email: "atendente@example.com",
+          },
+        },
+      },
+    };
+    const successfulReminderMessage = {
+      id: 902,
+      senderType: "funcionario",
+      senderName: "Atendente A",
+      conversation: {
+        ticket: {
+          id: 83,
+          company_id: 22,
+          empresa: { id: 22, name: "Resolve Mais" },
+          tituloReclamacao: { title: "Cobrança" },
+          cliente: {
+            id: 4,
+            name: "Maria",
+            email: "maria@example.com",
+          },
+        },
+      },
+    };
+    const { ticketService, chatbotRepositoryMock, mailerMock } = await loadTicketService({
+      ticketRepositoryOverrides: {
+        listInactiveOpenTickets: jest.fn().mockResolvedValue([]),
+      },
+      chatbotRepositoryOverrides: {
+        listMessagesPendingReminder: jest
+          .fn()
+          .mockResolvedValue([failedReminderMessage, successfulReminderMessage]),
+      },
+      mailerOverrides: {
+        sendTicketPendingReplyEmail: jest
+          .fn()
+          .mockResolvedValueOnce(false)
+          .mockResolvedValueOnce(true),
+      },
+    });
+
+    await ticketService.runTicketAutomationCycle();
+
+    expect(mailerMock.sendTicketPendingReplyEmail).toHaveBeenCalledTimes(2);
+    expect(chatbotRepositoryMock.markReminderSent).toHaveBeenCalledTimes(1);
+    expect(chatbotRepositoryMock.markReminderSent).toHaveBeenCalledWith({
+      messageId: 902,
+    });
+  });
 });
