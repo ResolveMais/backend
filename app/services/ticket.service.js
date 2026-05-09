@@ -1611,6 +1611,7 @@ const autoCloseInactiveTickets = async () => {
     const inactiveTickets = await ticketRepository.listInactiveOpenTickets({
       cutoffDate,
     });
+    let closedTicketsCount = 0;
 
     for (const inactiveTicket of inactiveTickets) {
       const plainTicket = toPlain(inactiveTicket);
@@ -1650,9 +1651,16 @@ const autoCloseInactiveTickets = async () => {
         ticketId: plainTicket.id,
         status: TICKET_STATUS.FECHADO,
       });
+      closedTicketsCount += 1;
     }
+
+    return {
+      inactiveTicketsFound: inactiveTickets.length,
+      closedTicketsCount,
+    };
   } catch (error) {
     console.error("Erro ao fechar tickets inativos automaticamente:", error);
+    throw error;
   }
 };
 
@@ -1662,6 +1670,10 @@ const sendDelayedReplyReminders = async () => {
     const messages = await chatbotRepository.listMessagesPendingReminder({
       cutoffDate,
     });
+    let deliveredMessagesCount = 0;
+    let partiallyDeliveredMessagesCount = 0;
+    let messagesWithoutRecipientsCount = 0;
+    let failedMessagesCount = 0;
 
     console.log(`Encontradas ${messages.length} mensagens pendentes de resposta para envio de lembretes.`);
 
@@ -1689,10 +1701,15 @@ const sendDelayedReplyReminders = async () => {
         recipients = [formatUserSummary(ticket.cliente)].filter((recipient) => recipient?.email);
       }
 
-      if (recipients.length === 0) continue;
+      if (recipients.length === 0) {
+        messagesWithoutRecipientsCount += 1;
+        continue;
+      }
+
+      let deliveredRecipientsCount = 0;
 
       for (const recipient of recipients) {
-        await sendTicketPendingReplyEmail({
+        const reminderDelivered = await sendTicketPendingReplyEmail({
           to: recipient.email,
           recipientName: recipient.name,
           senderName,
@@ -1701,20 +1718,56 @@ const sendDelayedReplyReminders = async () => {
           subjectTitle: ticket.tituloReclamacao?.title,
           waitingFor,
         });
+
+        if (reminderDelivered) {
+          deliveredRecipientsCount += 1;
+        }
+      }
+
+      if (deliveredRecipientsCount === 0) {
+        failedMessagesCount += 1;
+        console.warn(
+          `Nenhum lembrete de resposta foi entregue para a mensagem ${plainMessage.id}. O envio permanecerá pendente para nova tentativa.`
+        );
+        continue;
+      }
+
+      if (deliveredRecipientsCount < recipients.length) {
+        partiallyDeliveredMessagesCount += 1;
+        console.warn(
+          `Lembrete da mensagem ${plainMessage.id} entregue parcialmente (${deliveredRecipientsCount}/${recipients.length}). Marcando como enviado porque ao menos um destinatário foi notificado.`
+        );
       }
 
       await chatbotRepository.markReminderSent({
         messageId: plainMessage.id,
       });
+
+      deliveredMessagesCount += 1;
     }
+
+    return {
+      pendingMessagesFound: messages.length,
+      deliveredMessagesCount,
+      partiallyDeliveredMessagesCount,
+      messagesWithoutRecipientsCount,
+      failedMessagesCount,
+    };
   } catch (error) {
     console.error("Erro ao enviar lembretes de resposta:", error);
+    throw error;
   }
 };
 
 const runTicketAutomationCycle = async () => {
-  await autoCloseInactiveTickets();
-  await sendDelayedReplyReminders();
+  const closedTicketsSummary = await autoCloseInactiveTickets();
+  const remindersSummary = await sendDelayedReplyReminders();
+
+  return {
+    executedAt: new Date().toISOString(),
+    ...closedTicketsSummary,
+    ...remindersSummary,
+  };
 };
 
 const ticketService = {
