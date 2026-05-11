@@ -105,6 +105,7 @@ const initializeDatabase = () => {
       console.log("Database sync skipped.");
     } catch (err) {
       console.log("Database connection is not working!", err);
+      databaseReady = null;
       throw err;
     }
   })();
