@@ -26,7 +26,6 @@ const createDefaultCompanyServiceMock = () => ({
 });
 
 const createDefaultTicketServiceMock = () => ({
-  runTicketAutomationCycle: jest.fn(),
   createTicket: jest.fn(),
   getCompanies: jest.fn(),
   getComplaintTitlesByCompany: jest.fn(),

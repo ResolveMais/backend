@@ -95,9 +95,11 @@ const loadTicketService = async ({
   }));
 
   const ticketServiceModule = await import("../../../app/services/ticket.service.js");
+  const ticketAutomationServiceModule = await import("../../../app/services/ticketAutomation.service.js");
 
   return {
     ticketService: ticketServiceModule.default,
+    ticketAutomationService: ticketAutomationServiceModule.default,
     chatbotRepositoryMock,
     companyRepositoryMock,
     ticketRepositoryMock,
@@ -654,7 +656,7 @@ describe("app/services/ticket.service", () => {
         },
       },
     };
-    const { ticketService, chatbotRepositoryMock, ticketRepositoryMock, mailerMock, realtimeMock } =
+    const { ticketAutomationService, chatbotRepositoryMock, ticketRepositoryMock, mailerMock, realtimeMock } =
       await loadTicketService({
         ticketRepositoryOverrides: {
           listInactiveOpenTickets: jest.fn().mockResolvedValue([inactiveTicket]),
@@ -686,7 +688,7 @@ describe("app/services/ticket.service", () => {
         },
       });
 
-    await ticketService.runTicketAutomationCycle();
+    await ticketAutomationService.runTicketAutomationCycle();
 
     expect(ticketRepositoryMock.updateTicketById).toHaveBeenCalledWith(
       80,
@@ -761,7 +763,7 @@ describe("app/services/ticket.service", () => {
         },
       },
     };
-    const { ticketService, chatbotRepositoryMock, mailerMock } = await loadTicketService({
+    const { ticketAutomationService, chatbotRepositoryMock, mailerMock } = await loadTicketService({
       ticketRepositoryOverrides: {
         listInactiveOpenTickets: jest.fn().mockResolvedValue([]),
       },
@@ -778,7 +780,7 @@ describe("app/services/ticket.service", () => {
       },
     });
 
-    await ticketService.runTicketAutomationCycle();
+    await ticketAutomationService.runTicketAutomationCycle();
 
     expect(mailerMock.sendTicketPendingReplyEmail).toHaveBeenCalledTimes(2);
     expect(chatbotRepositoryMock.markReminderSent).toHaveBeenCalledTimes(1);
