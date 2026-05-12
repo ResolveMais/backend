@@ -140,6 +140,7 @@ describe("app/services/chatbot.service", () => {
         conversationId: 900,
         role: "assistant",
         senderType: "bot",
+        content: "Oi! Sou o Resolve Assist. Estou aqui para ajudar com este chamado e responder suas dúvidas com base nas informações disponíveis.",
       })
     );
     expect(response).toEqual(
@@ -226,7 +227,7 @@ describe("app/services/chatbot.service", () => {
       id: 502,
       role: "assistant",
       content:
-        "No momento, o Resolve Assist está indisponível. Seu ticket já foi registrado e logo um atendente assumirá o atendimento neste mesmo chat.",
+        "No momento, o Resolve Assist está indisponível e não consigo responder com segurança agora.",
       senderType: "bot",
       senderName: "Resolve Assist",
       createdAt: "2026-04-30T10:06:05.000Z",
@@ -314,12 +315,13 @@ describe("app/services/chatbot.service", () => {
       status: "aberto",
       description: "Pedido atrasado",
       cliente: { id: 15, name: "Maria" },
+      assignedEmployee: { id: 22, name: "Jacinto" },
       empresa: {
         name: "Resolve Mais",
         description: "Atendimento digital",
         aiContext: "Empresa de tecnologia com suporte para pedidos online.",
         aiInstructions: "Sempre peça o número do pedido antes de orientar sobre entrega.",
-        aiExamples: "Atraso na entrega: solicitar código de rastreio e número do pedido.",
+        aiExamples: "Atraso na entrega: informar apenas dados de rastreio registrados no ticket.",
       },
       tituloReclamacao: { title: "Entrega" },
       createdAt: "2026-04-30T10:00:00.000Z",
@@ -387,7 +389,57 @@ describe("app/services/chatbot.service", () => {
       "Sempre peça o número do pedido"
     );
     expect(companyContextMessage.content).toContain(
-      "Atraso na entrega: solicitar código de rastreio"
+      "Atraso na entrega: informar apenas dados de rastreio"
+    );
+    expect(companyContextMessage.content).toContain(
+      "não tome iniciativa, não prometa atendimento humano"
+    );
+    expect(companyContextMessage.content).toContain(
+      "Processo de atendimento deste ticket"
+    );
+    expect(companyContextMessage.content).toContain(
+      "A conversa do ticket acontece neste mesmo chat"
+    );
+    expect(companyContextMessage.content).toContain(
+      "canal do chamado é este mesmo chat"
+    );
+    expect(companyContextMessage.content).toContain(
+      "Responsável registrado: Jacinto"
+    );
+
+    const basePromptMessage = messages[0];
+    expect(basePromptMessage.content).toContain(
+      "Não tome iniciativa pelo usuário"
+    );
+    expect(basePromptMessage.content).toContain(
+      "responda cada parte relevante da mensagem"
+    );
+    expect(basePromptMessage.content).toContain(
+      "Se o usuário pedir para redirecionar"
+    );
+    expect(basePromptMessage.content).toContain(
+      "sem soar seco ou ríspido"
+    );
+    expect(basePromptMessage.content).toContain(
+      "Não use 'Pelas informações registradas' como início padrão"
+    );
+    expect(basePromptMessage.content).toContain(
+      "Quando a informação solicitada estiver no contexto, responda diretamente"
+    );
+    expect(basePromptMessage.content).toContain(
+      "ofereça passos gerais e seguros"
+    );
+    expect(basePromptMessage.content).toContain(
+      "O ticket já faz parte do contexto desde o primeiro contato"
+    );
+    expect(basePromptMessage.content).toContain(
+      "como faço para falar com ele?"
+    );
+    expect(basePromptMessage.content).toContain(
+      "Não peça para o usuário repetir informações"
+    );
+    expect(basePromptMessage.content).toContain(
+      "diga claramente que não sabe"
     );
   });
 });

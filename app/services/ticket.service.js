@@ -33,7 +33,7 @@ const normalizeUserType = (value = "") =>
 
 const BOT_AGENT = Object.freeze({
   name: "Resolve Assist",
-  description: "Assistente virtual responsável pelo primeiro atendimento do ticket. Enquanto o chamado estiver aberto, o usuário será atendido inicialmente pela IA. Se necessário, um atendente humano assumirá a conversa no mesmo chat.",
+  description: "Assistente virtual responsável por responder com base nas informações registradas no ticket e no contexto cadastrado.",
 });
 
 const toPlain = (value) => (value && typeof value.get === "function" ? value.get({ plain: true }) : value) || null;
@@ -296,6 +296,9 @@ const buildMessagePreview = (content, maxLength = 120) => {
   return `${normalizedContent.slice(0, maxLength - 3).trim()}...`;
 };
 
+const buildInitialBotGreetingContent = () =>
+  "Oi! Sou o Resolve Assist. Estou aqui para ajudar com este chamado e responder suas dúvidas com base nas informações disponíveis.";
+
 const getNotificationSourceLabel = (ticket, context) => {
   if (context.scope === "customer") {
     return ticket.company?.name || "Empresa";
@@ -436,7 +439,7 @@ const ensureInitialBotGreeting = async ({ ticket, context }) => {
   const greeting = await chatbotRepository.createMessage({
     conversationId: ensuredConversation.id,
     role: "assistant",
-    content: "Oi! Sou o Resolve Assist. Me conte o que aconteceu e vou tentar ajudar. Se eu não conseguir resolver por aqui, logo um atendente vai aceitar o chamado e dar continuidade ao seu atendimento.",
+    content: buildInitialBotGreetingContent(formattedTicket),
     senderType: TICKET_MESSAGE_SENDER.BOT,
     senderName: BOT_AGENT.name,
     messageType: "chat",
