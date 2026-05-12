@@ -212,6 +212,9 @@ describe("app/services/company.service", () => {
           id: 12,
           name: "Resolve Pro",
           description: "Nova descrição",
+          aiContext: "Empresa de tecnologia",
+          aiInstructions: "Pedir número do pedido",
+          aiExamples: "Atraso: solicitar rastreio",
           cnpj: "12345678000199",
         }),
       },
@@ -227,11 +230,17 @@ describe("app/services/company.service", () => {
     const response = await companyService.updateMyCompanyProfile(9, {
       name: " Resolve Pro ",
       description: " Nova descrição ",
+      aiContext: " Empresa de tecnologia ",
+      aiInstructions: " Pedir número do pedido ",
+      aiExamples: " Atraso: solicitar rastreio ",
     });
 
     expect(companyRepositoryMock.update).toHaveBeenCalledWith(12, {
       name: "Resolve Pro",
       description: "Nova descrição",
+      aiContext: "Empresa de tecnologia",
+      aiInstructions: "Pedir número do pedido",
+      aiExamples: "Atraso: solicitar rastreio",
     });
     expect(response).toEqual({
       status: 200,
@@ -240,6 +249,9 @@ describe("app/services/company.service", () => {
         id: 12,
         name: "Resolve Pro",
         description: "Nova descrição",
+        aiContext: "Empresa de tecnologia",
+        aiInstructions: "Pedir número do pedido",
+        aiExamples: "Atraso: solicitar rastreio",
         cnpj: "12345678000199",
       },
     });

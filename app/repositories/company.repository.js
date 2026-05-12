@@ -1,4 +1,8 @@
 import db from "../models/index.js";
+import {
+  filterAttributesBySchema,
+  filterPayloadBySchema,
+} from "../utils/dbSchemaCompat.js";
 
 const {
   Company: CompanyModel,
@@ -8,9 +12,25 @@ const {
   User: UserModel,
 } = db;
 
+const publicCompanyAttributes = ["id", "name", "description", "cnpj"];
+const adminCompanyAttributes = [
+  ...publicCompanyAttributes,
+  "aiContext",
+  "aiInstructions",
+  "aiExamples",
+];
+
+const getPublicCompanyAttributes = async () =>
+  filterAttributesBySchema(CompanyModel, publicCompanyAttributes);
+
+const getAdminCompanyAttributes = async () =>
+  filterAttributesBySchema(CompanyModel, adminCompanyAttributes);
+
 const getAll = async () => {
   try {
-    let companies = await CompanyModel.findAll();
+    let companies = await CompanyModel.findAll({
+      attributes: await getPublicCompanyAttributes(),
+    });
 
     if (!companies || companies.length === 0) companies = [];
 
@@ -21,19 +41,55 @@ const getAll = async () => {
   }
 };
 
-const getById = async (id, options = {}) => CompanyModel.findByPk(id, options);
+const getById = async (id, options = {}) => {
+  const { includeAiSettings = false, ...queryOptions } = options;
+
+  return CompanyModel.findByPk(id, {
+    attributes: includeAiSettings
+      ? await getAdminCompanyAttributes()
+      : await getPublicCompanyAttributes(),
+    ...queryOptions,
+  });
+};
 
 const getByCnpj = async (cnpj, options = {}) =>
-  CompanyModel.findOne({ where: { cnpj }, ...options });
+  CompanyModel.findOne({
+    where: { cnpj },
+    attributes: await getPublicCompanyAttributes(),
+    ...options,
+  });
 
 const getByName = async (name, options = {}) =>
-  CompanyModel.findOne({ where: { name }, ...options });
+  CompanyModel.findOne({
+    where: { name },
+    attributes: await getPublicCompanyAttributes(),
+    ...options,
+  });
 
-const create = async ({ name, description, cnpj }, options = {}) =>
-  CompanyModel.create({ name, description, cnpj }, options);
+const create = async (
+  { name, description, cnpj, aiContext = null, aiInstructions = null, aiExamples = null },
+  options = {}
+) =>
+  CompanyModel.create(
+    await filterPayloadBySchema(CompanyModel, {
+      name,
+      description,
+      cnpj,
+      aiContext,
+      aiInstructions,
+      aiExamples,
+    }),
+    options
+  );
 
 const update = async (id, payload, options = {}) => {
-  const [updatedRowsCount] = await CompanyModel.update(payload, {
+  const safePayload = await filterPayloadBySchema(CompanyModel, payload);
+
+  if (Object.keys(safePayload).length === 0) {
+    return false;
+  }
+
+  const [updatedRowsCount] = await CompanyModel.update(safePayload, {
     where: { id },
     ...options,
   });
@@ -48,6 +104,7 @@ const getByAdminUserId = async (userId, options = {}) => {
       {
         model: CompanyModel,
         as: "company",
+        attributes: await getAdminCompanyAttributes(),
       },
     ],
     ...options,

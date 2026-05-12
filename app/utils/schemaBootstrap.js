@@ -63,6 +63,11 @@ const ensureModelColumns = async ({ sequelize, model, attributeNames }) => {
 const ensureApplicationSchema = async ({ sequelize, models }) => {
   const compatibilityPlan = [
     {
+      label: "Company",
+      model: models.Company,
+      attributeNames: ["aiContext", "aiInstructions", "aiExamples"],
+    },
+    {
       label: "Ticket",
       model: models.Ticket,
       attributeNames: [

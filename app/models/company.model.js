@@ -15,6 +15,21 @@ const initCompanyModel = (sequelize, Sequelize) => {
       description: {
         type: Sequelize.STRING,
       },
+      aiContext: {
+        type: Sequelize.TEXT,
+        allowNull: true,
+        field: "ai_context",
+      },
+      aiInstructions: {
+        type: Sequelize.TEXT,
+        allowNull: true,
+        field: "ai_instructions",
+      },
+      aiExamples: {
+        type: Sequelize.TEXT,
+        allowNull: true,
+        field: "ai_examples",
+      },
       cnpj: {
         type: Sequelize.STRING,
         allowNull: false,

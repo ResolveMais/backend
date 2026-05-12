@@ -16,6 +16,7 @@ const loadChatbotService = async ({
   chatbotRepositoryOverrides = {},
   ticketRepositoryOverrides = {},
   realtimeOverrides = {},
+  openAiCreateMock = jest.fn(),
 } = {}) => {
   jest.resetModules();
 
@@ -45,7 +46,7 @@ const loadChatbotService = async ({
       constructor() {
         this.chat = {
           completions: {
-            create: jest.fn(),
+            create: openAiCreateMock,
           },
         };
       }
@@ -69,6 +70,7 @@ const loadChatbotService = async ({
     chatbotRepositoryMock,
     ticketRepositoryMock,
     realtimeMock,
+    openAiCreateMock,
   };
 };
 
@@ -302,5 +304,90 @@ describe("app/services/chatbot.service", () => {
         name: "Resolve Assist",
       }),
     });
+  });
+
+  test("streamMessage sends company AI context to OpenAI when the ticket has company settings", async () => {
+    process.env.OPENAI_API_KEY = "test-key";
+
+    const ticket = {
+      id: 88,
+      status: "aberto",
+      description: "Pedido atrasado",
+      cliente: { id: 15, name: "Maria" },
+      empresa: {
+        name: "Resolve Mais",
+        description: "Atendimento digital",
+        aiContext: "Empresa de tecnologia com suporte para pedidos online.",
+        aiInstructions: "Sempre peça o número do pedido antes de orientar sobre entrega.",
+        aiExamples: "Atraso na entrega: solicitar código de rastreio e número do pedido.",
+      },
+      tituloReclamacao: { title: "Entrega" },
+      createdAt: "2026-04-30T10:00:00.000Z",
+      updatedAt: "2026-04-30T10:05:00.000Z",
+    };
+    const openAiCreateMock = jest.fn().mockResolvedValue([
+      { choices: [{ delta: { content: "Claro, posso ajudar." } }] },
+    ]);
+    const { chatbotService, openAiCreateMock: capturedOpenAiCreateMock } =
+      await loadChatbotService({
+        openAiCreateMock,
+        ticketRepositoryOverrides: {
+          getByIdForUser: jest.fn().mockResolvedValue(ticket),
+          createUpdate: jest
+            .fn()
+            .mockResolvedValueOnce({ id: 801 })
+            .mockResolvedValueOnce({ id: 802 }),
+        },
+        chatbotRepositoryOverrides: {
+          getActiveConversationByUserAndTicketId: jest.fn().mockResolvedValue({
+            id: 700,
+            createdAt: "2026-04-30T09:00:00.000Z",
+            updatedAt: "2026-04-30T09:10:00.000Z",
+          }),
+          getMessagesByConversationId: jest.fn().mockResolvedValue([]),
+          createMessage: jest
+            .fn()
+            .mockResolvedValueOnce({
+              id: 501,
+              role: "user",
+              content: "Meu pedido atrasou",
+              senderType: "cliente",
+              senderName: "Maria",
+              senderUserId: 15,
+              createdAt: "2026-04-30T10:06:00.000Z",
+            })
+            .mockResolvedValueOnce({
+              id: 502,
+              role: "assistant",
+              content: "Claro, posso ajudar.",
+              senderType: "bot",
+              senderName: "Resolve Assist",
+              createdAt: "2026-04-30T10:06:05.000Z",
+            }),
+        },
+      });
+
+    await chatbotService.streamMessage({
+      userId: 15,
+      ticketId: 88,
+      message: "Meu pedido atrasou",
+      onStart: jest.fn(),
+      onToken: jest.fn(),
+    });
+
+    const [{ messages }] = capturedOpenAiCreateMock.mock.calls[0];
+    const companyContextMessage = messages.find((message) =>
+      message.content.includes("Contexto interno cadastrado pela empresa")
+    );
+
+    expect(companyContextMessage.content).toContain(
+      "Empresa de tecnologia com suporte para pedidos online."
+    );
+    expect(companyContextMessage.content).toContain(
+      "Sempre peça o número do pedido"
+    );
+    expect(companyContextMessage.content).toContain(
+      "Atraso na entrega: solicitar código de rastreio"
+    );
   });
 });

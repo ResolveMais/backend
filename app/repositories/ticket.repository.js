@@ -39,6 +39,15 @@ const baseTicketAttributes = [
 
 const baseUserAttributes = ["id", "name", "email", "phone", "cpf", "userType", "avatarUrl"];
 const supportUserAttributes = ["id", "name", "email", "phone", "jobTitle", "userType", "avatarUrl"];
+const baseCompanyAttributes = [
+  "id",
+  "name",
+  "description",
+  "cnpj",
+  "aiContext",
+  "aiInstructions",
+  "aiExamples",
+];
 const baseTicketUpdateAttributes = ["id", "message", "type", "actorUserId", "statusFrom", "statusTo", "details", "createdAt"];
 
 const getTicketAttributes = async () => filterAttributesBySchema(TicketModel, baseTicketAttributes);
@@ -46,6 +55,8 @@ const getTicketAttributes = async () => filterAttributesBySchema(TicketModel, ba
 const getBaseUserAttributes = async () => filterAttributesBySchema(User, baseUserAttributes);
 
 const getSupportUserAttributes = async () => filterAttributesBySchema(User, supportUserAttributes);
+
+const getCompanyAttributes = async () => filterAttributesBySchema(Company, baseCompanyAttributes);
 
 const getTicketUpdateAttributes = async () => filterAttributesBySchema(TicketUpdate, baseTicketUpdateAttributes);
 
@@ -97,7 +108,7 @@ const buildTicketIncludes = async ({ includeCustomer = false } = {}) => {
     {
       model: Company,
       as: "empresa",
-      attributes: ["id", "name", "description", "cnpj"],
+      attributes: await getCompanyAttributes(),
     },
     {
       model: ComplaintTitle,

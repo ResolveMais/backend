@@ -10,6 +10,7 @@ describe("app/utils/schemaBootstrap", () => {
   test("ensureApplicationSchema adds only the missing compatibility columns", async () => {
     const describeTable = jest
       .fn()
+      .mockResolvedValueOnce({ id: {}, name: {}, description: {}, cnpj: {} })
       .mockResolvedValueOnce({ id: {}, status: {}, assigned_user_id: {} })
       .mockResolvedValueOnce({ id: {}, role: {} })
       .mockResolvedValueOnce({ id: {}, message: {}, actor_user_id: {} });
@@ -25,6 +26,11 @@ describe("app/utils/schemaBootstrap", () => {
     await ensureApplicationSchema({
       sequelize,
       models: {
+        Company: buildModel("companies", {
+          aiContext: { field: "ai_context", type: "TEXT" },
+          aiInstructions: { field: "ai_instructions", type: "TEXT" },
+          aiExamples: { field: "ai_examples", type: "TEXT" },
+        }),
         Ticket: buildModel("tickets", {
           assignedUserId: { field: "assigned_user_id", type: "INTEGER" },
           acceptedAt: { field: "accepted_at", type: "DATE", allowNull: true },
@@ -41,6 +47,21 @@ describe("app/utils/schemaBootstrap", () => {
       },
     });
 
+    expect(addColumn).toHaveBeenCalledWith(
+      "companies",
+      "ai_context",
+      expect.objectContaining({ type: "TEXT" })
+    );
+    expect(addColumn).toHaveBeenCalledWith(
+      "companies",
+      "ai_instructions",
+      expect.objectContaining({ type: "TEXT" })
+    );
+    expect(addColumn).toHaveBeenCalledWith(
+      "companies",
+      "ai_examples",
+      expect.objectContaining({ type: "TEXT" })
+    );
     expect(addColumn).toHaveBeenCalledWith(
       "tickets",
       "accepted_at",

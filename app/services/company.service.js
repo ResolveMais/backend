@@ -15,15 +15,26 @@ const USER_TYPES = Object.freeze({
 
 const normalizeDigits = (value = "") => String(value).replace(/\D/g, "");
 const normalizeText = (value = "") => String(value).trim();
+const MAX_AI_PROFILE_FIELD_LENGTH = 4000;
 const toPlain = (value) =>
   value && typeof value.get === "function" ? value.get({ plain: true }) : value;
 
-const formatCompanySnapshot = (company) => ({
-  id: company.id,
-  name: company.name,
-  description: company.description,
-  cnpj: company.cnpj,
-});
+const formatCompanySnapshot = (company, { includeAiSettings = false } = {}) => {
+  const snapshot = {
+    id: company.id,
+    name: company.name,
+    description: company.description,
+    cnpj: company.cnpj,
+  };
+
+  if (includeAiSettings) {
+    snapshot.aiContext = company.aiContext || "";
+    snapshot.aiInstructions = company.aiInstructions || "";
+    snapshot.aiExamples = company.aiExamples || "";
+  }
+
+  return snapshot;
+};
 
 const formatAdminResponse = (adminLink) => ({
   id: adminLink?.user?.id,
@@ -147,6 +158,21 @@ const getCompanyAdmins = async (companyId) => {
   return admins.map(formatAdminResponse);
 };
 
+const normalizeAiProfileField = (value, fieldLabel) => {
+  const normalizedValue = normalizeText(value);
+
+  if (normalizedValue.length > MAX_AI_PROFILE_FIELD_LENGTH) {
+    return {
+      error: {
+        status: 400,
+        message: `${fieldLabel} deve ter no máximo ${MAX_AI_PROFILE_FIELD_LENGTH} caracteres`,
+      },
+    };
+  }
+
+  return { value: normalizedValue };
+};
+
 const getCompanyEmployees = async (companyId) => {
   const employees = await userRepository.listByCompanyAndType({
     companyId,
@@ -251,7 +277,7 @@ const getMyCompanyAdmins = async (authUserId) => {
 
   return {
     status: 200,
-    company: formatCompanySnapshot(context.company),
+    company: formatCompanySnapshot(context.company, { includeAiSettings: true }),
     admins,
   };
 };
@@ -264,7 +290,7 @@ const getMyCompanyEmployees = async (authUserId) => {
 
   return {
     status: 200,
-    company: formatCompanySnapshot(context.company),
+    company: formatCompanySnapshot(context.company, { includeAiSettings: true }),
     employees,
   };
 };
@@ -277,7 +303,7 @@ const getMyCompanyComplaintTitles = async (authUserId) => {
 
   return {
     status: 200,
-    company: formatCompanySnapshot(context.company),
+    company: formatCompanySnapshot(context.company, { includeAiSettings: true }),
     complaintTitles: complaintTitles.map((complaintTitle) =>
       formatComplaintTitleResponse(complaintTitle.get({ plain: true }))
     ),
@@ -312,18 +338,40 @@ const updateMyCompanyProfile = async (authUserId, payload) => {
     updatePayload.description = normalizeText(payload.description);
   }
 
+  const aiFieldMap = [
+    ["aiContext", "Contexto da empresa"],
+    ["aiInstructions", "Instruções da IA"],
+    ["aiExamples", "Exemplos de atendimento"],
+  ];
+
+  for (const [fieldName, fieldLabel] of aiFieldMap) {
+    if (payload?.[fieldName] === undefined) {
+      continue;
+    }
+
+    const normalizedField = normalizeAiProfileField(payload[fieldName], fieldLabel);
+
+    if (normalizedField.error) {
+      return normalizedField.error;
+    }
+
+    updatePayload[fieldName] = normalizedField.value;
+  }
+
   if (Object.keys(updatePayload).length === 0) {
     return { status: 400, message: "No company profile fields provided for update" };
   }
 
   await companyRepository.update(context.company.id, updatePayload);
 
-  const company = await companyRepository.getById(context.company.id);
+  const company = await companyRepository.getById(context.company.id, {
+    includeAiSettings: true,
+  });
 
   return {
     status: 200,
     message: "Company profile updated successfully",
-    company: formatCompanySnapshot(company),
+    company: formatCompanySnapshot(company, { includeAiSettings: true }),
   };
 };
 
@@ -366,7 +414,7 @@ const addMyCompanyComplaintTitle = async (authUserId, payload) => {
   return {
     status: 201,
     message: "Assunto cadastrado com sucesso",
-    company: formatCompanySnapshot(context.company),
+    company: formatCompanySnapshot(context.company, { includeAiSettings: true }),
     complaintTitles: complaintTitles.map((complaintTitle) =>
       formatComplaintTitleResponse(complaintTitle.get({ plain: true }))
     ),
@@ -411,7 +459,7 @@ const removeMyCompanyComplaintTitle = async (authUserId, complaintTitleId) => {
   return {
     status: 200,
     message: "Assunto removido com sucesso",
-    company: formatCompanySnapshot(context.company),
+    company: formatCompanySnapshot(context.company, { includeAiSettings: true }),
     complaintTitles: complaintTitles.map((complaintTitle) =>
       formatComplaintTitleResponse(complaintTitle.get({ plain: true }))
     ),
@@ -464,7 +512,7 @@ const addMyCompanyEmployee = async (authUserId, payload) => {
   return {
     status: 201,
     message: "Employee created successfully",
-    company: formatCompanySnapshot(context.company),
+    company: formatCompanySnapshot(context.company, { includeAiSettings: true }),
     employees,
   };
 };
@@ -523,7 +571,7 @@ const updateMyCompanyEmployee = async (authUserId, employeeUserId, payload) => {
   return {
     status: 200,
     message: "Employee updated successfully",
-    company: formatCompanySnapshot(context.company),
+    company: formatCompanySnapshot(context.company, { includeAiSettings: true }),
     employees,
   };
 };
@@ -546,7 +594,7 @@ const removeMyCompanyEmployee = async (authUserId, employeeUserId) => {
   return {
     status: 200,
     message: "Employee removed from company",
-    company: formatCompanySnapshot(context.company),
+    company: formatCompanySnapshot(context.company, { includeAiSettings: true }),
     employees,
   };
 };
@@ -662,7 +710,7 @@ const addMyCompanyAdmin = async (authUserId, payload) => {
 
   return {
     status: 200,
-    company: formatCompanySnapshot(context.company),
+    company: formatCompanySnapshot(context.company, { includeAiSettings: true }),
     admins,
   };
 };
@@ -695,7 +743,7 @@ const setMyCompanyPrimaryAdmin = async (authUserId, adminUserId) => {
 
   return {
     status: 200,
-    company: formatCompanySnapshot(context.company),
+    company: formatCompanySnapshot(context.company, { includeAiSettings: true }),
     admins,
   };
 };
@@ -747,7 +795,7 @@ const removeMyCompanyAdmin = async (authUserId, adminUserId) => {
 
   return {
     status: 200,
-    company: formatCompanySnapshot(context.company),
+    company: formatCompanySnapshot(context.company, { includeAiSettings: true }),
     admins,
   };
 };
