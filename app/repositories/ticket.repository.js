@@ -344,9 +344,9 @@ const getClosedByUserId = async (userId, pagination = null) => {
   }
 };
 
-const getOpenAndPendingByUserId = async (userId) => {
+const getOpenAndPendingByUserId = async (userId, pagination = null) => {
   try {
-    return TicketModel.findAll({
+    const query = {
       where: {
         user_id: userId,
         status: {
@@ -356,7 +356,20 @@ const getOpenAndPendingByUserId = async (userId) => {
       attributes: await getTicketAttributes(),
       include: await buildTicketIncludes(),
       order: [["updatedAt", "DESC"], ["createdAt", "DESC"]],
-    });
+    };
+
+    if (pagination) {
+      const { limit, offset } = pagination;
+
+      return TicketModel.findAndCountAll({
+        ...query,
+        distinct: true,
+        limit,
+        offset,
+      });
+    }
+
+    return TicketModel.findAll(query);
   } catch (error) {
     console.error("Erro ao buscar tickets ativos:", error);
     throw error;

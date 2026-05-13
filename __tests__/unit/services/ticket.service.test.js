@@ -218,6 +218,58 @@ describe("app/services/ticket.service", () => {
     });
   });
 
+  test("getUserOpenAndPendingTickets applies repository pagination and returns pagination metadata", async () => {
+    const activeTicket = {
+      id: 15,
+      status: "pendente",
+      description: "Atendimento em andamento",
+      createdAt: "2026-04-30T10:00:00.000Z",
+      updatedAt: "2026-04-30T11:00:00.000Z",
+      empresa: { id: 8, name: "USCS" },
+      tituloReclamacao: { id: 3, title: "Site" },
+      assignedEmployee: { id: 7, name: "Jacinto" },
+    };
+    const { ticketService, ticketRepositoryMock } = await loadTicketService({
+      ticketRepositoryOverrides: {
+        getOpenAndPendingByUserId: jest.fn().mockResolvedValue({
+          rows: [activeTicket],
+          count: 16,
+        }),
+      },
+    });
+
+    const response = await ticketService.getUserOpenAndPendingTickets(4, {
+      page: "2",
+      pageSize: "10",
+    });
+
+    expect(ticketRepositoryMock.getOpenAndPendingByUserId).toHaveBeenCalledWith(4, {
+      limit: 10,
+      offset: 10,
+    });
+    expect(response).toEqual({
+      status: 200,
+      tickets: [
+        expect.objectContaining({
+          id: 15,
+          empresa: "USCS",
+          tituloReclamacao: "Site",
+          descricao: "Atendimento em andamento",
+          status: "pendente",
+          criadoEm: "2026-04-30T10:00:00.000Z",
+          atualizadoEm: "2026-04-30T11:00:00.000Z",
+          atribuidoPara: "Jacinto",
+        }),
+      ],
+      pagination: {
+        page: 2,
+        pageSize: 10,
+        total: 16,
+        totalPages: 2,
+      },
+    });
+  });
+
   test("getWorkspaceTickets filters employee visibility to open tickets or their assigned tickets", async () => {
     const visibleOpen = {
       id: 1,

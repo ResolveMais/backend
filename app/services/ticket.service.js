@@ -24,9 +24,9 @@ const TICKET_RESOLUTION_SOURCE = Object.freeze({
   HUMAN: "human",
 });
 
-const CLOSED_TICKETS_DEFAULT_PAGE = 1;
-const CLOSED_TICKETS_DEFAULT_PAGE_SIZE = 10;
-const CLOSED_TICKETS_MAX_PAGE_SIZE = 100;
+const TICKETS_DEFAULT_PAGE = 1;
+const TICKETS_DEFAULT_PAGE_SIZE = 10;
+const TICKETS_MAX_PAGE_SIZE = 100;
 
 const normalizeUserType = (value = "") =>
   String(value || "")
@@ -45,11 +45,11 @@ const parsePositiveInteger = (value, fallback) => {
   return parsed;
 };
 
-const normalizeClosedTicketsPagination = ({ page, pageSize } = {}) => {
-  const normalizedPage = parsePositiveInteger(page, CLOSED_TICKETS_DEFAULT_PAGE);
+const normalizeTicketPagination = ({ page, pageSize } = {}) => {
+  const normalizedPage = parsePositiveInteger(page, TICKETS_DEFAULT_PAGE);
   const normalizedPageSize = Math.min(
-    parsePositiveInteger(pageSize, CLOSED_TICKETS_DEFAULT_PAGE_SIZE),
-    CLOSED_TICKETS_MAX_PAGE_SIZE
+    parsePositiveInteger(pageSize, TICKETS_DEFAULT_PAGE_SIZE),
+    TICKETS_MAX_PAGE_SIZE
   );
 
   return {
@@ -592,11 +592,35 @@ const getUserTickets = async (userId) => {
   }
 };
 
-const getUserOpenAndPendingTickets = async (userId) => {
+const getUserOpenAndPendingTickets = async (userId, paginationOptions = {}) => {
   try {
     if (!userId) return { status: 400, message: "ID do usuário é obrigatório" };
 
-    const tickets = await ticketRepository.getOpenAndPendingByUserId(userId);
+    let pagination = normalizeTicketPagination(paginationOptions);
+    let activeTicketsResult = await ticketRepository.getOpenAndPendingByUserId(userId, {
+      limit: pagination.limit,
+      offset: pagination.offset,
+    });
+
+    const total = Array.isArray(activeTicketsResult)
+      ? activeTicketsResult.length
+      : Number(activeTicketsResult?.count || 0);
+    const totalPages = Math.max(1, Math.ceil(total / pagination.pageSize));
+
+    if (total > 0 && pagination.page > totalPages) {
+      pagination = normalizeTicketPagination({
+        page: totalPages,
+        pageSize: pagination.pageSize,
+      });
+      activeTicketsResult = await ticketRepository.getOpenAndPendingByUserId(userId, {
+        limit: pagination.limit,
+        offset: pagination.offset,
+      });
+    }
+
+    const tickets = Array.isArray(activeTicketsResult)
+      ? activeTicketsResult
+      : activeTicketsResult?.rows || [];
 
     const sanitized = tickets.map((ticket) => {
       const formattedTicket = formatTicket(ticket);
@@ -608,12 +632,22 @@ const getUserOpenAndPendingTickets = async (userId) => {
         descricao: formattedTicket.description,
         status: formattedTicket.status,
         criadoEm: formattedTicket.createdAt,
+        atualizadoEm: formattedTicket.updatedAt,
         atribuidoPara: formattedTicket.assignedEmployee?.name || null,
         protocolo: formattedTicket.protocol,
       };
     });
 
-    return { status: 200, tickets: sanitized };
+    return {
+      status: 200,
+      tickets: sanitized,
+      pagination: {
+        page: pagination.page,
+        pageSize: pagination.pageSize,
+        total,
+        totalPages,
+      },
+    };
   } catch (error) {
     console.error("Erro ao buscar tickets ativos:", error);
     return { status: 500, message: "Erro ao buscar tickets." };
@@ -624,17 +658,19 @@ const getUserClosedTickets = async (userId, paginationOptions = {}) => {
   try {
     if (!userId) return { status: 400, message: "ID do usuário é obrigatório" };
 
-    let pagination = normalizeClosedTicketsPagination(paginationOptions);
+    let pagination = normalizeTicketPagination(paginationOptions);
     let closedTicketsResult = await ticketRepository.getClosedByUserId(userId, {
       limit: pagination.limit,
       offset: pagination.offset,
     });
 
-    const total = Number(closedTicketsResult?.count || 0);
+    const total = Array.isArray(closedTicketsResult)
+      ? closedTicketsResult.length
+      : Number(closedTicketsResult?.count || 0);
     const totalPages = Math.max(1, Math.ceil(total / pagination.pageSize));
 
     if (total > 0 && pagination.page > totalPages) {
-      pagination = normalizeClosedTicketsPagination({
+      pagination = normalizeTicketPagination({
         page: totalPages,
         pageSize: pagination.pageSize,
       });

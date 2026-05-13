@@ -99,6 +99,48 @@ describe("Integração de tickets", () => {
     });
   });
 
+  test("GET /api/tickets/user-open-pending-tickets encaminha paginação para o service", async () => {
+    const { app, ticketServiceMock } = await loadApp({
+      jwtOverrides: {
+        verify: () => ({ id: 4 }),
+      },
+      userRepositoryOverrides: {
+        getById: async () => ({
+          id: 4,
+          name: "Cliente",
+          userType: "cliente",
+        }),
+      },
+      ticketServiceOverrides: {
+        getUserOpenAndPendingTickets: async (userId, pagination) => ({
+          status: 200,
+          userId,
+          pagination,
+          tickets: [],
+        }),
+      },
+    });
+
+    const response = await request(app)
+      .get("/api/tickets/user-open-pending-tickets?page=2&pageSize=5")
+      .set("Authorization", "Bearer customer-token");
+
+    expect(ticketServiceMock.getUserOpenAndPendingTickets).toHaveBeenCalledWith(4, {
+      page: "2",
+      pageSize: "5",
+    });
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({
+      status: 200,
+      userId: 4,
+      pagination: {
+        page: "2",
+        pageSize: "5",
+      },
+      tickets: [],
+    });
+  });
+
   test("POST /api/tickets/:ticketId/accept encaminha params, body e req.user corretamente", async () => {
     const { app, ticketServiceMock } = await loadApp({
       jwtOverrides: {

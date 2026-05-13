@@ -36,7 +36,10 @@ const getUserClosedTickets = async (req, res) => {
 };
 
 const getUserOpenAndPendingTickets = async (req, res) => {
-  const response = await ticketService.getUserOpenAndPendingTickets(req.user?.id);
+  const response = await ticketService.getUserOpenAndPendingTickets(req.user?.id, {
+    page: req.query?.page,
+    pageSize: req.query?.pageSize,
+  });
   return res.status(response.status).json(response);
 };
 
