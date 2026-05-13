@@ -312,9 +312,9 @@ const listByCompanyId = async ({ companyId, statuses = null }) => {
   }
 };
 
-const getClosedByUserId = async (userId) => {
+const getClosedByUserId = async (userId, pagination = null) => {
   try {
-    return TicketModel.findAll({
+    const query = {
       where: {
         user_id: userId,
         status: {
@@ -324,7 +324,20 @@ const getClosedByUserId = async (userId) => {
       attributes: await getTicketAttributes(),
       include: await buildTicketIncludes(),
       order: [["updatedAt", "DESC"]],
-    });
+    };
+
+    if (pagination) {
+      const { limit, offset } = pagination;
+
+      return TicketModel.findAndCountAll({
+        ...query,
+        distinct: true,
+        limit,
+        offset,
+      });
+    }
+
+    return TicketModel.findAll(query);
   } catch (error) {
     console.error("Erro ao buscar tickets fechados:", error);
     throw error;

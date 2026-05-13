@@ -57,6 +57,48 @@ describe("Integração de tickets", () => {
     });
   });
 
+  test("GET /api/tickets/user-closed-tickets encaminha paginação para o service", async () => {
+    const { app, ticketServiceMock } = await loadApp({
+      jwtOverrides: {
+        verify: () => ({ id: 4 }),
+      },
+      userRepositoryOverrides: {
+        getById: async () => ({
+          id: 4,
+          name: "Cliente",
+          userType: "cliente",
+        }),
+      },
+      ticketServiceOverrides: {
+        getUserClosedTickets: async (userId, pagination) => ({
+          status: 200,
+          userId,
+          pagination,
+          tickets: [],
+        }),
+      },
+    });
+
+    const response = await request(app)
+      .get("/api/tickets/user-closed-tickets?page=3&pageSize=20")
+      .set("Authorization", "Bearer customer-token");
+
+    expect(ticketServiceMock.getUserClosedTickets).toHaveBeenCalledWith(4, {
+      page: "3",
+      pageSize: "20",
+    });
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({
+      status: 200,
+      userId: 4,
+      pagination: {
+        page: "3",
+        pageSize: "20",
+      },
+      tickets: [],
+    });
+  });
+
   test("POST /api/tickets/:ticketId/accept encaminha params, body e req.user corretamente", async () => {
     const { app, ticketServiceMock } = await loadApp({
       jwtOverrides: {

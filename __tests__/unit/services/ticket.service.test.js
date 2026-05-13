@@ -168,6 +168,56 @@ describe("app/services/ticket.service", () => {
     });
   });
 
+  test("getUserClosedTickets applies repository pagination and returns pagination metadata", async () => {
+    const closedTicket = {
+      id: 12,
+      status: "fechado",
+      description: "Problema resolvido",
+      createdAt: "2026-04-30T10:00:00.000Z",
+      updatedAt: "2026-04-30T11:00:00.000Z",
+      closedAt: "2026-04-30T11:00:00.000Z",
+      empresa: { id: 8, name: "USCS" },
+      tituloReclamacao: { id: 3, title: "Site" },
+    };
+    const { ticketService, ticketRepositoryMock } = await loadTicketService({
+      ticketRepositoryOverrides: {
+        getClosedByUserId: jest.fn().mockResolvedValue({
+          rows: [closedTicket],
+          count: 21,
+        }),
+      },
+    });
+
+    const response = await ticketService.getUserClosedTickets(4, {
+      page: "2",
+      pageSize: "10",
+    });
+
+    expect(ticketRepositoryMock.getClosedByUserId).toHaveBeenCalledWith(4, {
+      limit: 10,
+      offset: 10,
+    });
+    expect(response).toEqual({
+      status: 200,
+      tickets: [
+        expect.objectContaining({
+          id: 12,
+          empresa: "USCS",
+          tituloReclamacao: "Site",
+          descricao: "Problema resolvido",
+          status: "fechado",
+          finalizadoEm: "2026-04-30T11:00:00.000Z",
+        }),
+      ],
+      pagination: {
+        page: 2,
+        pageSize: 10,
+        total: 21,
+        totalPages: 3,
+      },
+    });
+  });
+
   test("getWorkspaceTickets filters employee visibility to open tickets or their assigned tickets", async () => {
     const visibleOpen = {
       id: 1,

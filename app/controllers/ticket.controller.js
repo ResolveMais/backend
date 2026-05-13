@@ -28,7 +28,10 @@ const getUserTickets = async (req, res) => {
 };
 
 const getUserClosedTickets = async (req, res) => {
-  const response = await ticketService.getUserClosedTickets(req.user?.id);
+  const response = await ticketService.getUserClosedTickets(req.user?.id, {
+    page: req.query?.page,
+    pageSize: req.query?.pageSize,
+  });
   return res.status(response.status).json(response);
 };
 

@@ -24,12 +24,41 @@ const TICKET_RESOLUTION_SOURCE = Object.freeze({
   HUMAN: "human",
 });
 
+const CLOSED_TICKETS_DEFAULT_PAGE = 1;
+const CLOSED_TICKETS_DEFAULT_PAGE_SIZE = 10;
+const CLOSED_TICKETS_MAX_PAGE_SIZE = 100;
+
 const normalizeUserType = (value = "") =>
   String(value || "")
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .trim()
     .toLowerCase();
+
+const parsePositiveInteger = (value, fallback) => {
+  const parsed = Number(value);
+
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    return fallback;
+  }
+
+  return parsed;
+};
+
+const normalizeClosedTicketsPagination = ({ page, pageSize } = {}) => {
+  const normalizedPage = parsePositiveInteger(page, CLOSED_TICKETS_DEFAULT_PAGE);
+  const normalizedPageSize = Math.min(
+    parsePositiveInteger(pageSize, CLOSED_TICKETS_DEFAULT_PAGE_SIZE),
+    CLOSED_TICKETS_MAX_PAGE_SIZE
+  );
+
+  return {
+    page: normalizedPage,
+    pageSize: normalizedPageSize,
+    limit: normalizedPageSize,
+    offset: (normalizedPage - 1) * normalizedPageSize,
+  };
+};
 
 const BOT_AGENT = Object.freeze({
   name: "Resolve Assist",
@@ -591,11 +620,33 @@ const getUserOpenAndPendingTickets = async (userId) => {
   }
 };
 
-const getUserClosedTickets = async (userId) => {
+const getUserClosedTickets = async (userId, paginationOptions = {}) => {
   try {
     if (!userId) return { status: 400, message: "ID do usuário é obrigatório" };
 
-    const tickets = await ticketRepository.getClosedByUserId(userId);
+    let pagination = normalizeClosedTicketsPagination(paginationOptions);
+    let closedTicketsResult = await ticketRepository.getClosedByUserId(userId, {
+      limit: pagination.limit,
+      offset: pagination.offset,
+    });
+
+    const total = Number(closedTicketsResult?.count || 0);
+    const totalPages = Math.max(1, Math.ceil(total / pagination.pageSize));
+
+    if (total > 0 && pagination.page > totalPages) {
+      pagination = normalizeClosedTicketsPagination({
+        page: totalPages,
+        pageSize: pagination.pageSize,
+      });
+      closedTicketsResult = await ticketRepository.getClosedByUserId(userId, {
+        limit: pagination.limit,
+        offset: pagination.offset,
+      });
+    }
+
+    const tickets = Array.isArray(closedTicketsResult)
+      ? closedTicketsResult
+      : closedTicketsResult?.rows || [];
 
     const sanitized = tickets.map((ticket) => {
       const formattedTicket = formatTicket(ticket);
@@ -611,7 +662,16 @@ const getUserClosedTickets = async (userId) => {
       };
     });
 
-    return { status: 200, tickets: sanitized };
+    return {
+      status: 200,
+      tickets: sanitized,
+      pagination: {
+        page: pagination.page,
+        pageSize: pagination.pageSize,
+        total,
+        totalPages,
+      },
+    };
   } catch (error) {
     console.error("Erro ao buscar tickets finalizados:", error);
     return { status: 500, message: "Erro ao buscar tickets finalizados." };
