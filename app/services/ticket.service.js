@@ -263,6 +263,52 @@ const formatTicket = (ticket, context = null) => {
   };
 };
 
+const formatTicketListItem = (
+  ticket,
+  { includeClosedAt = false, includeLegacyAliases = true } = {}
+) => {
+  const formattedTicket = formatTicket(ticket);
+  if (!formattedTicket) return null;
+
+  const companyName = formattedTicket.company?.name || "Empresa não informada";
+  const complaintTitleName = formattedTicket.complaintTitle?.title || "Sem título";
+  const assignedTo = formattedTicket.assignedEmployee || null;
+  const closedAt = formattedTicket.closedAt || formattedTicket.updatedAt;
+
+  const formattedListItem = {
+    id: formattedTicket.id,
+    protocol: formattedTicket.protocol,
+    company: formattedTicket.company,
+    companyName,
+    complaintTitle: formattedTicket.complaintTitle,
+    complaintTitleName,
+    description: formattedTicket.description,
+    status: formattedTicket.status,
+    createdAt: formattedTicket.createdAt,
+    updatedAt: formattedTicket.updatedAt,
+    assignedTo,
+    assignedToName: assignedTo?.name || null,
+    ...(includeClosedAt ? { closedAt } : {}),
+  };
+
+  if (!includeLegacyAliases) {
+    return formattedListItem;
+  }
+
+  return {
+    ...formattedListItem,
+    // Aliases kept temporarily for older frontend paths and existing clients.
+    protocolo: formattedTicket.protocol,
+    empresa: companyName,
+    tituloReclamacao: complaintTitleName,
+    descricao: formattedTicket.description,
+    criadoEm: formattedTicket.createdAt,
+    atualizadoEm: formattedTicket.updatedAt,
+    atribuidoPara: assignedTo?.name || null,
+    ...(includeClosedAt ? { finalizadoEm: closedAt } : {}),
+  };
+};
+
 const formatMessage = (message) => {
   const plainMessage = toPlain(message);
   if (!plainMessage) return null;
@@ -532,9 +578,15 @@ const createTicket = async ({
       message: "Ticket criado com sucesso",
       ticket: {
         id: newTicket.id,
+        protocol: buildProtocol(newTicket.id),
+        description: newTicket.description,
         descricao: newTicket.description,
         status: normalizeTicketStatus(newTicket.status),
+        createdAt: newTicket.createdAt,
+        updatedAt: newTicket.updatedAt || newTicket.createdAt,
+        protocolo: buildProtocol(newTicket.id),
         criadoEm: newTicket.createdAt,
+        atualizadoEm: newTicket.updatedAt || newTicket.createdAt,
       },
     };
   } catch (error) {
@@ -572,18 +624,7 @@ const getUserTickets = async (userId) => {
     if (!userId) return { status: 400, message: "ID do usuário é obrigatório" };
 
     const tickets = await ticketRepository.getByUserId(userId);
-    const sanitized = tickets.map((ticket) => {
-      const formattedTicket = formatTicket(ticket);
-
-      return {
-        id: formattedTicket.id,
-        empresa: formattedTicket.company?.name || "Empresa não informada",
-        tituloReclamacao: formattedTicket.complaintTitle?.title || "Sem título",
-        descricao: formattedTicket.description,
-        status: formattedTicket.status,
-        criadoEm: formattedTicket.createdAt,
-      };
-    });
+    const sanitized = tickets.map((ticket) => formatTicketListItem(ticket)).filter(Boolean);
 
     return { status: 200, tickets: sanitized };
   } catch (error) {
@@ -622,21 +663,7 @@ const getUserOpenAndPendingTickets = async (userId, paginationOptions = {}) => {
       ? activeTicketsResult
       : activeTicketsResult?.rows || [];
 
-    const sanitized = tickets.map((ticket) => {
-      const formattedTicket = formatTicket(ticket);
-
-      return {
-        id: formattedTicket.id,
-        empresa: formattedTicket.company?.name || "Empresa não informada",
-        tituloReclamacao: formattedTicket.complaintTitle?.title || "Sem título",
-        descricao: formattedTicket.description,
-        status: formattedTicket.status,
-        criadoEm: formattedTicket.createdAt,
-        atualizadoEm: formattedTicket.updatedAt,
-        atribuidoPara: formattedTicket.assignedEmployee?.name || null,
-        protocolo: formattedTicket.protocol,
-      };
-    });
+    const sanitized = tickets.map((ticket) => formatTicketListItem(ticket)).filter(Boolean);
 
     return {
       status: 200,
@@ -684,19 +711,14 @@ const getUserClosedTickets = async (userId, paginationOptions = {}) => {
       ? closedTicketsResult
       : closedTicketsResult?.rows || [];
 
-    const sanitized = tickets.map((ticket) => {
-      const formattedTicket = formatTicket(ticket);
-
-      return {
-        id: formattedTicket.id,
-        empresa: formattedTicket.company?.name || "Empresa não informada",
-        tituloReclamacao: formattedTicket.complaintTitle?.title || "Sem título",
-        descricao: formattedTicket.description,
-        status: formattedTicket.status,
-        criadoEm: formattedTicket.createdAt,
-        finalizadoEm: formattedTicket.closedAt || formattedTicket.updatedAt,
-      };
-    });
+    const sanitized = tickets
+      .map((ticket) =>
+        formatTicketListItem(ticket, {
+          includeClosedAt: true,
+          includeLegacyAliases: false,
+        })
+      )
+      .filter(Boolean);
 
     return {
       status: 200,

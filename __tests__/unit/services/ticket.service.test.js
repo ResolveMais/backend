@@ -161,9 +161,15 @@ describe("app/services/ticket.service", () => {
       message: "Ticket criado com sucesso",
       ticket: {
         id: 44,
+        protocol: "33300044",
+        description: "Problema ao acessar a conta",
         descricao: "Problema ao acessar a conta",
         status: "aberto",
+        createdAt: "2026-04-30T10:00:00.000Z",
+        updatedAt: "2026-04-30T10:00:00.000Z",
+        protocolo: "33300044",
         criadoEm: "2026-04-30T10:00:00.000Z",
+        atualizadoEm: "2026-04-30T10:00:00.000Z",
       },
     });
   });
@@ -200,14 +206,30 @@ describe("app/services/ticket.service", () => {
     expect(response).toEqual({
       status: 200,
       tickets: [
-        expect.objectContaining({
+        {
           id: 12,
-          empresa: "USCS",
-          tituloReclamacao: "Site",
-          descricao: "Problema resolvido",
+          protocol: "33300012",
+          company: {
+            id: 8,
+            name: "USCS",
+            description: null,
+            cnpj: null,
+          },
+          companyName: "USCS",
+          complaintTitle: {
+            id: 3,
+            title: "Site",
+            description: null,
+          },
+          complaintTitleName: "Site",
+          description: "Problema resolvido",
           status: "fechado",
-          finalizadoEm: "2026-04-30T11:00:00.000Z",
-        }),
+          createdAt: "2026-04-30T10:00:00.000Z",
+          updatedAt: "2026-04-30T11:00:00.000Z",
+          closedAt: "2026-04-30T11:00:00.000Z",
+          assignedTo: null,
+          assignedToName: null,
+        },
       ],
       pagination: {
         page: 2,
@@ -252,6 +274,16 @@ describe("app/services/ticket.service", () => {
       tickets: [
         expect.objectContaining({
           id: 15,
+          protocol: "33300015",
+          company: expect.objectContaining({ id: 8, name: "USCS" }),
+          companyName: "USCS",
+          complaintTitle: expect.objectContaining({ id: 3, title: "Site" }),
+          complaintTitleName: "Site",
+          description: "Atendimento em andamento",
+          createdAt: "2026-04-30T10:00:00.000Z",
+          updatedAt: "2026-04-30T11:00:00.000Z",
+          assignedTo: expect.objectContaining({ id: 7, name: "Jacinto" }),
+          assignedToName: "Jacinto",
           empresa: "USCS",
           tituloReclamacao: "Site",
           descricao: "Atendimento em andamento",
@@ -259,6 +291,7 @@ describe("app/services/ticket.service", () => {
           criadoEm: "2026-04-30T10:00:00.000Z",
           atualizadoEm: "2026-04-30T11:00:00.000Z",
           atribuidoPara: "Jacinto",
+          protocolo: "33300015",
         }),
       ],
       pagination: {
