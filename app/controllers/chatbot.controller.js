@@ -14,16 +14,6 @@ const getConversation = async (req, res) => {
   return res.status(response.status).json(response);
 };
 
-const clearConversation = async (req, res) => {
-  const response = await chatbotService.clearConversation({
-    userId: req.user?.id,
-    conversationId: req.body?.conversationId || null,
-    ticketId: req.body?.ticketId || null,
-  });
-
-  return res.status(response.status).json(response);
-};
-
 const streamMessage = async (req, res) => {
   const { message, conversationId = null, ticketId = null } = req.body || {};
 
@@ -81,10 +71,9 @@ const streamMessage = async (req, res) => {
   }
 };
 
-export { clearConversation, getConversation, streamMessage };
+export { getConversation, streamMessage };
 
 export default {
   getConversation,
-  clearConversation,
   streamMessage,
 };

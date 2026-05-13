@@ -27,7 +27,6 @@ const loadChatbotService = async ({
     getActiveConversationByUserId: jest.fn(),
     getMessagesByConversationId: jest.fn(),
     createMessage: jest.fn(),
-    softDeleteConversation: jest.fn(),
     ...chatbotRepositoryOverrides,
   };
   const ticketRepositoryMock = {
@@ -165,24 +164,6 @@ describe("app/services/chatbot.service", () => {
         }),
       })
     );
-  });
-
-  test("clearConversation is idempotent when no active conversation exists", async () => {
-    const { chatbotService } = await loadChatbotService({
-      chatbotRepositoryOverrides: {
-        getActiveConversationByUserId: jest.fn().mockResolvedValue(null),
-      },
-    });
-
-    const response = await chatbotService.clearConversation({
-      userId: 15,
-      conversationId: null,
-    });
-
-    expect(response).toEqual({
-      status: 200,
-      message: "Nenhuma conversa ativa para limpar.",
-    });
   });
 
   test("streamMessage rejects blank messages before touching repositories", async () => {

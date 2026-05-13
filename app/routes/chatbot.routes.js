@@ -7,7 +7,6 @@ const router = express.Router();
 router.use(authMiddleware);
 
 router.get("/conversation", chatbotController.getConversation);
-router.post("/conversation/clear", chatbotController.clearConversation);
 router.post("/message/stream", chatbotController.streamMessage);
 
 export default { alias: "/api/chatbot", router };

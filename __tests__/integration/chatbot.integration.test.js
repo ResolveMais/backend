@@ -42,49 +42,6 @@ describe("Integração de chatbot", () => {
     });
   });
 
-  test("POST /api/chatbot/conversation/clear repassa body opcional ao service", async () => {
-    const { app, chatbotServiceMock } = await loadApp({
-      jwtOverrides: {
-        verify: () => ({ id: 9 }),
-      },
-      userRepositoryOverrides: {
-        getById: async () => ({
-          id: 9,
-          name: "Cliente",
-          userType: "cliente",
-        }),
-      },
-      chatbotServiceOverrides: {
-        clearConversation: async ({ userId, conversationId, ticketId }) => ({
-          status: 200,
-          message: "Conversa limpa com sucesso.",
-          userId,
-          conversationId,
-          ticketId,
-        }),
-      },
-    });
-
-    const response = await request(app)
-      .post("/api/chatbot/conversation/clear")
-      .set("Authorization", "Bearer bot-token")
-      .send({ conversationId: 13, ticketId: 77 });
-
-    expect(chatbotServiceMock.clearConversation).toHaveBeenCalledWith({
-      userId: 9,
-      conversationId: 13,
-      ticketId: 77,
-    });
-    expect(response.status).toBe(200);
-    expect(response.body).toEqual({
-      status: 200,
-      message: "Conversa limpa com sucesso.",
-      userId: 9,
-      conversationId: 13,
-      ticketId: 77,
-    });
-  });
-
   test("POST /api/chatbot/message/stream responde 400 antes do streaming quando a mensagem está vazia", async () => {
     const { app } = await loadApp({
       jwtOverrides: {

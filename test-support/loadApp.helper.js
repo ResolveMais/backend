@@ -50,7 +50,6 @@ const createDefaultTicketServiceMock = () => ({
 
 const createDefaultChatbotServiceMock = () => ({
   getConversation: jest.fn(),
-  clearConversation: jest.fn(),
   streamMessage: jest.fn(),
 });
 

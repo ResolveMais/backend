@@ -236,31 +236,6 @@ const ensureConversation = async ({ userId, conversationId, ticketId = null }) =
   return chatbotRepository.createConversation({ userId });
 };
 
-const findConversationWithoutCreate = async ({
-  userId,
-  conversationId,
-  ticketId = null,
-}) => {
-  if (conversationId) {
-    const foundById = await chatbotRepository.getConversationByIdForUser({
-      conversationId,
-      userId,
-      ticketId,
-    });
-
-    if (foundById) return foundById;
-  }
-
-  if (ticketId) {
-    return chatbotRepository.getActiveConversationByUserAndTicketId({
-      userId,
-      ticketId,
-    });
-  }
-
-  return chatbotRepository.getActiveConversationByUserId(userId);
-};
-
 const streamOpenAICompletion = async ({
   model,
   apiKey,
@@ -452,48 +427,6 @@ const getConversation = async ({ userId, ticketId = null }) => {
   }
 };
 
-const clearConversation = async ({
-  userId,
-  conversationId = null,
-  ticketId = null,
-}) => {
-  try {
-    if (!userId) {
-      return { status: 401, message: "Usuário não autenticado." };
-    }
-
-    const parsedTicketId = parseTicketId(ticketId);
-
-    const conversation = await findConversationWithoutCreate({
-      userId,
-      conversationId,
-      ticketId: parsedTicketId,
-    });
-
-    if (!conversation) {
-      return { status: 200, message: "Nenhuma conversa ativa para limpar." };
-    }
-
-    const deleted = await chatbotRepository.softDeleteConversation({
-      conversationId: conversation.id,
-      userId,
-    });
-
-    if (!deleted) {
-      return { status: 404, message: "Conversa não encontrada." };
-    }
-
-    return { status: 200, message: "Conversa limpa com sucesso." };
-  } catch (error) {
-    console.error("Erro em clearConversation:", error.message);
-    const status = error?.statusCode || 500;
-    return {
-      status,
-      message: status === 500 ? "Erro interno ao limpar conversa." : error.message || "Erro ao limpar conversa.",
-    };
-  }
-};
-
 const streamMessage = async ({
   userId,
   message,
@@ -678,10 +611,9 @@ const streamMessage = async ({
   };
 };
 
-export { clearConversation, getConversation, streamMessage };
+export { getConversation, streamMessage };
 
 export default {
   getConversation,
-  clearConversation,
   streamMessage,
 };

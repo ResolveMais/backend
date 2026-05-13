@@ -11,7 +11,6 @@ const {
   ComplaintTitle,
   Ticket,
   User,
-  sequelize,
 } = db;
 
 const ACTIVE_CONVERSATION_WHERE = { del: false };
@@ -563,50 +562,6 @@ const markReminderSent = async ({
   return updatedCount > 0;
 };
 
-const softDeleteConversation = async ({ conversationId, userId }) => {
-  const transaction = await sequelize.transaction();
-
-  try {
-    const deletedAt = new Date();
-
-    await ChatMessage.update(
-      {
-        del: true,
-        deletedAt,
-      },
-      {
-        where: {
-          conversation_id: conversationId,
-          del: false,
-        },
-        transaction,
-      }
-    );
-
-    const [updatedRowsCount] = await ChatConversation.update(
-      {
-        del: true,
-        deletedAt,
-        updatedAt: deletedAt,
-      },
-      {
-        where: {
-          id: conversationId,
-          user_id: userId,
-          del: false,
-        },
-        transaction,
-      }
-    );
-
-    await transaction.commit();
-    return updatedRowsCount > 0;
-  } catch (error) {
-    await transaction.rollback();
-    throw error;
-  }
-};
-
 export default {
   getConversationByIdForUser,
   getActiveConversationByUserId,
@@ -622,5 +577,4 @@ export default {
   markTicketMessagesAsRead,
   listMessagesPendingReminder,
   markReminderSent,
-  softDeleteConversation,
 };
