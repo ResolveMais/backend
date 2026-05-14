@@ -1,3 +1,4 @@
+import { Op } from "sequelize";
 import db from "../models/index.js";
 import {
   filterAttributesBySchema,
@@ -19,6 +20,7 @@ const adminCompanyAttributes = [
   "aiInstructions",
   "aiExamples",
 ];
+const searchableAdminFields = ["name", "email", "jobTitle", "phone", "cpf"];
 
 const getPublicCompanyAttributes = async () =>
   filterAttributesBySchema(CompanyModel, publicCompanyAttributes);
@@ -113,20 +115,65 @@ const getByAdminUserId = async (userId, options = {}) => {
   return companyAdmin?.company || null;
 };
 
-const listAdmins = async (companyId, options = {}) =>
-  CompanyAdminModel.findAll({
-    where: { company_id: companyId },
-    attributes: ["id", "isPrimary"],
-    include: [
-      {
-        model: UserModel,
-        as: "user",
-        attributes: ["id", "name", "email", "phone", "cpf", "avatarUrl", "jobTitle", "userType"],
+const buildAdminSearchWhere = (search = "") => {
+  const normalizedSearch = String(search || "").trim();
+
+  if (!normalizedSearch) return null;
+
+  const searchPattern = `%${normalizedSearch}%`;
+
+  return {
+    [Op.or]: searchableAdminFields.map((field) => ({
+      [field]: {
+        [Op.like]: searchPattern,
       },
-    ],
+    })),
+  };
+};
+
+const listAdmins = async (companyId, options = {}) => {
+  const {
+    search = "",
+    isPrimary = null,
+    limit = null,
+    offset = 0,
+    ...queryOptions
+  } = options;
+  const where = { company_id: companyId };
+  const searchWhere = buildAdminSearchWhere(search);
+  const includeUser = {
+    model: UserModel,
+    as: "user",
+    attributes: ["id", "name", "email", "phone", "cpf", "avatarUrl", "jobTitle", "userType", "companyId"],
+  };
+
+  if (typeof isPrimary === "boolean") {
+    where.isPrimary = isPrimary;
+  }
+
+  if (searchWhere) {
+    includeUser.where = searchWhere;
+  }
+
+  const baseQuery = {
+    where,
+    attributes: ["id", "isPrimary"],
+    include: [includeUser],
     order: [["isPrimary", "DESC"], ["id", "ASC"]],
-    ...options,
-  });
+    ...queryOptions,
+  };
+
+  if (Number.isInteger(limit) && limit > 0) {
+    return CompanyAdminModel.findAndCountAll({
+      ...baseQuery,
+      distinct: true,
+      limit,
+      offset: Number.isInteger(offset) && offset > 0 ? offset : 0,
+    });
+  }
+
+  return CompanyAdminModel.findAll(baseQuery);
+};
 
 const getAdminLink = async ({ companyId, userId }, options = {}) =>
   CompanyAdminModel.findOne({

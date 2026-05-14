@@ -16,8 +16,76 @@ const USER_TYPES = Object.freeze({
 const normalizeDigits = (value = "") => String(value).replace(/\D/g, "");
 const normalizeText = (value = "") => String(value).trim();
 const MAX_AI_PROFILE_FIELD_LENGTH = 4000;
+const PEOPLE_DEFAULT_PAGE = 1;
+const PEOPLE_DEFAULT_PAGE_SIZE = 5;
+const PEOPLE_MAX_PAGE_SIZE = 50;
 const toPlain = (value) =>
   value && typeof value.get === "function" ? value.get({ plain: true }) : value;
+
+const parsePositiveInteger = (value, fallback) => {
+  const parsed = Number(value);
+
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    return fallback;
+  }
+
+  return parsed;
+};
+
+const shouldPaginatePeopleList = (options = {}) =>
+  options?.page !== undefined ||
+  options?.pageSize !== undefined ||
+  options?.limit !== undefined;
+
+const normalizePeopleListOptions = (options = {}) => {
+  const search = normalizeText(options?.search || options?.q || "");
+  const shouldPaginate = shouldPaginatePeopleList(options);
+
+  if (!shouldPaginate) {
+    return {
+      search,
+      pagination: null,
+    };
+  }
+
+  const page = parsePositiveInteger(options?.page, PEOPLE_DEFAULT_PAGE);
+  const pageSize = Math.min(
+    parsePositiveInteger(options?.pageSize || options?.limit, PEOPLE_DEFAULT_PAGE_SIZE),
+    PEOPLE_MAX_PAGE_SIZE
+  );
+
+  return {
+    search,
+    pagination: {
+      page,
+      pageSize,
+      limit: pageSize,
+      offset: (page - 1) * pageSize,
+    },
+  };
+};
+
+const normalizeAdminRoleFilter = (value = "") => {
+  const normalizedValue = normalizeText(value).toLowerCase();
+
+  if (["primary", "principal"].includes(normalizedValue)) return "primary";
+  if (["secondary", "secundario", "secundário"].includes(normalizedValue)) {
+    return "secondary";
+  }
+
+  return "all";
+};
+
+const extractListRows = (result) => (Array.isArray(result) ? result : result?.rows || []);
+const extractListTotal = (result) =>
+  Array.isArray(result) ? result.length : Number(result?.count || 0);
+
+const buildPaginationResponse = ({ page, pageSize }, total) => ({
+  page,
+  pageSize,
+  total,
+  totalPages: Math.max(1, Math.ceil(total / pageSize)),
+});
 
 const formatCompanySnapshot = (company, { includeAiSettings = false } = {}) => {
   const snapshot = {
@@ -153,9 +221,53 @@ const getCompanyFromAdminUser = async (userId) => {
   return company || null;
 };
 
-const getCompanyAdmins = async (companyId) => {
-  const admins = await companyRepository.listAdmins(companyId);
-  return admins.map(formatAdminResponse);
+const getCompanyAdmins = async (companyId, options = {}) => {
+  const listOptions = normalizePeopleListOptions(options);
+  const adminRoleFilter = normalizeAdminRoleFilter(options?.adminRole || options?.role);
+  const repositoryOptions = {
+    search: listOptions.search,
+  };
+
+  if (adminRoleFilter === "primary") {
+    repositoryOptions.isPrimary = true;
+  }
+
+  if (adminRoleFilter === "secondary") {
+    repositoryOptions.isPrimary = false;
+  }
+
+  if (listOptions.pagination) {
+    repositoryOptions.limit = listOptions.pagination.limit;
+    repositoryOptions.offset = listOptions.pagination.offset;
+  }
+
+  let adminsResult = await companyRepository.listAdmins(companyId, repositoryOptions);
+  const total = extractListTotal(adminsResult);
+
+  if (listOptions.pagination) {
+    const totalPages = Math.max(1, Math.ceil(total / listOptions.pagination.pageSize));
+
+    if (total > 0 && listOptions.pagination.page > totalPages) {
+      listOptions.pagination = {
+        ...listOptions.pagination,
+        page: totalPages,
+        offset: (totalPages - 1) * listOptions.pagination.pageSize,
+      };
+      adminsResult = await companyRepository.listAdmins(companyId, {
+        ...repositoryOptions,
+        offset: listOptions.pagination.offset,
+      });
+    }
+  }
+
+  const admins = extractListRows(adminsResult).map(formatAdminResponse);
+
+  if (!listOptions.pagination) return admins;
+
+  return {
+    items: admins,
+    pagination: buildPaginationResponse(listOptions.pagination, total),
+  };
 };
 
 const normalizeAiProfileField = (value, fieldLabel) => {
@@ -173,13 +285,51 @@ const normalizeAiProfileField = (value, fieldLabel) => {
   return { value: normalizedValue };
 };
 
-const getCompanyEmployees = async (companyId) => {
-  const employees = await userRepository.listByCompanyAndType({
+const getCompanyEmployees = async (companyId, options = {}) => {
+  const listOptions = normalizePeopleListOptions(options);
+  const repositoryOptions = {
     companyId,
     userType: USER_TYPES.FUNCIONARIO,
+    search: listOptions.search,
+  };
+
+  if (listOptions.pagination) {
+    repositoryOptions.limit = listOptions.pagination.limit;
+    repositoryOptions.offset = listOptions.pagination.offset;
+  }
+
+  let employeesResult = await userRepository.listByCompanyAndType(repositoryOptions);
+  const total = extractListTotal(employeesResult);
+
+  if (listOptions.pagination) {
+    const totalPages = Math.max(1, Math.ceil(total / listOptions.pagination.pageSize));
+
+    if (total > 0 && listOptions.pagination.page > totalPages) {
+      listOptions.pagination = {
+        ...listOptions.pagination,
+        page: totalPages,
+        offset: (totalPages - 1) * listOptions.pagination.pageSize,
+      };
+      employeesResult = await userRepository.listByCompanyAndType({
+        ...repositoryOptions,
+        offset: listOptions.pagination.offset,
+      });
+    }
+  }
+
+  const employees = extractListRows(employeesResult);
+  const formattedEmployees = employees.map((employee) => {
+    const plainEmployee = toPlain(employee);
+
+    return formatEmployeeResponse(plainEmployee);
   });
 
-  return employees.map((employee) => formatEmployeeResponse(employee.get({ plain: true })));
+  if (!listOptions.pagination) return formattedEmployees;
+
+  return {
+    items: formattedEmployees,
+    pagination: buildPaginationResponse(listOptions.pagination, total),
+  };
 };
 
 const getCompanyDataForAdmin = async (authUserId) => {
@@ -269,30 +419,44 @@ const getPublicCompanyDashboard = async (companyId) => {
   };
 };
 
-const getMyCompanyAdmins = async (authUserId) => {
+const getMyCompanyAdmins = async (authUserId, listOptions = {}) => {
   const context = await getCompanyDataForAdmin(authUserId);
   if (context.error) return context.error;
 
-  const admins = await getCompanyAdmins(context.company.id);
+  const adminsResult = await getCompanyAdmins(context.company.id, listOptions);
+  const admins = Array.isArray(adminsResult) ? adminsResult : adminsResult.items;
 
-  return {
+  const response = {
     status: 200,
     company: formatCompanySnapshot(context.company, { includeAiSettings: true }),
     admins,
   };
+
+  if (!Array.isArray(adminsResult) && adminsResult.pagination) {
+    response.pagination = adminsResult.pagination;
+  }
+
+  return response;
 };
 
-const getMyCompanyEmployees = async (authUserId) => {
+const getMyCompanyEmployees = async (authUserId, listOptions = {}) => {
   const context = await getCompanyDataForAdmin(authUserId);
   if (context.error) return context.error;
 
-  const employees = await getCompanyEmployees(context.company.id);
+  const employeesResult = await getCompanyEmployees(context.company.id, listOptions);
+  const employees = Array.isArray(employeesResult) ? employeesResult : employeesResult.items;
 
-  return {
+  const response = {
     status: 200,
     company: formatCompanySnapshot(context.company, { includeAiSettings: true }),
     employees,
   };
+
+  if (!Array.isArray(employeesResult) && employeesResult.pagination) {
+    response.pagination = employeesResult.pagination;
+  }
+
+  return response;
 };
 
 const getMyCompanyComplaintTitles = async (authUserId) => {

@@ -1,5 +1,8 @@
 import companyService from "../services/company.service.js";
 
+const getRequestQueryOrUndefined = (req) =>
+  Object.keys(req.query || {}).length > 0 ? req.query : undefined;
+
 const getAll = async (req, res) => {
   try {
     const response = await companyService.getAllCompanies();
@@ -22,7 +25,10 @@ const getPublicDashboard = async (req, res) => {
 
 const getMyCompanyAdmins = async (req, res) => {
   try {
-    const response = await companyService.getMyCompanyAdmins(req.user.id);
+    const queryOptions = getRequestQueryOrUndefined(req);
+    const response = queryOptions
+      ? await companyService.getMyCompanyAdmins(req.user.id, queryOptions)
+      : await companyService.getMyCompanyAdmins(req.user.id);
     return res.status(response.status).json(response);
   } catch (error) {
     console.error("Error fetching company admins: " + error);
@@ -32,7 +38,10 @@ const getMyCompanyAdmins = async (req, res) => {
 
 const getMyCompanyEmployees = async (req, res) => {
   try {
-    const response = await companyService.getMyCompanyEmployees(req.user.id);
+    const queryOptions = getRequestQueryOrUndefined(req);
+    const response = queryOptions
+      ? await companyService.getMyCompanyEmployees(req.user.id, queryOptions)
+      : await companyService.getMyCompanyEmployees(req.user.id);
     return res.status(response.status).json(response);
   } catch (error) {
     console.error("Error fetching company employees: " + error);

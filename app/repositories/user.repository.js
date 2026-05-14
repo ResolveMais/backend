@@ -1,3 +1,4 @@
+import { Op } from "sequelize";
 import db from "../models/index.js";
 const { User: UserModel } = db;
 
@@ -14,6 +15,24 @@ const baseUserAttributes = [
   "birthDate",
   "companyId",
 ];
+
+const searchableUserFields = ["name", "email", "jobTitle", "phone", "cpf"];
+
+const buildUserSearchWhere = (search = "") => {
+  const normalizedSearch = String(search || "").trim();
+
+  if (!normalizedSearch) return {};
+
+  const searchPattern = `%${normalizedSearch}%`;
+
+  return {
+    [Op.or]: searchableUserFields.map((field) => ({
+      [field]: {
+        [Op.like]: searchPattern,
+      },
+    })),
+  };
+};
 
 const create = async (
   {
@@ -120,13 +139,33 @@ const update = async (id, payload, options = {}) => {
   }
 };
 
-const listByCompanyAndType = async ({ companyId, userType }) => {
+const listByCompanyAndType = async ({
+  companyId,
+  userType,
+  search = "",
+  limit = null,
+  offset = 0,
+}) => {
   try {
-    return await UserModel.findAll({
-      where: { companyId, userType },
+    const queryOptions = {
+      where: {
+        companyId,
+        userType,
+        ...buildUserSearchWhere(search),
+      },
       attributes: baseUserAttributes,
       order: [["id", "ASC"]],
-    });
+    };
+
+    if (Number.isInteger(limit) && limit > 0) {
+      return await UserModel.findAndCountAll({
+        ...queryOptions,
+        limit,
+        offset: Number.isInteger(offset) && offset > 0 ? offset : 0,
+      });
+    }
+
+    return await UserModel.findAll(queryOptions);
   } catch (error) {
     console.error("Error listing users by company/type: " + error.message);
     throw error;

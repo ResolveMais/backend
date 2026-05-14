@@ -365,6 +365,125 @@ describe("app/services/company.service", () => {
     );
   });
 
+  test("getMyCompanyEmployees applies backend search and pagination", async () => {
+    const employeesResult = {
+      count: 12,
+      rows: [
+        asModel({
+          id: 70,
+          name: "Ana Lima",
+          email: "ana@example.com",
+          phone: "11999999999",
+          cpf: "12345678901",
+          avatarUrl: "https://cdn.example.com/ana.png",
+          jobTitle: "Analista",
+          userType: "funcionario",
+          companyId: 12,
+        }),
+      ],
+    };
+    const { companyService, userRepositoryMock } = await loadCompanyService({
+      companyRepositoryOverrides: {
+        getByAdminUserId: jest.fn().mockResolvedValue({
+          id: 12,
+          name: "Resolve",
+          description: "Original",
+          cnpj: "12345678000199",
+        }),
+      },
+      userRepositoryOverrides: {
+        listByCompanyAndType: jest.fn().mockResolvedValue(employeesResult),
+      },
+    });
+
+    const response = await companyService.getMyCompanyEmployees(9, {
+      search: "ana",
+      page: 1,
+      pageSize: 5,
+    });
+
+    expect(userRepositoryMock.listByCompanyAndType).toHaveBeenCalledWith({
+      companyId: 12,
+      userType: "funcionario",
+      search: "ana",
+      limit: 5,
+      offset: 0,
+    });
+    expect(response.employees).toEqual([
+      expect.objectContaining({
+        id: 70,
+        name: "Ana Lima",
+        avatarUrl: "https://cdn.example.com/ana.png",
+      }),
+    ]);
+    expect(response.pagination).toEqual({
+      page: 1,
+      pageSize: 5,
+      total: 12,
+      totalPages: 3,
+    });
+  });
+
+  test("getMyCompanyAdmins applies search, role filter and pagination", async () => {
+    const adminsResult = {
+      count: 1,
+      rows: [
+        {
+          user: {
+            id: 501,
+            name: "Cilene",
+            email: "cilene@example.com",
+            phone: null,
+            cpf: "12345678901",
+            avatarUrl: null,
+            jobTitle: "Gestora",
+            userType: "empresa",
+            companyId: 12,
+          },
+          isPrimary: true,
+        },
+      ],
+    };
+    const { companyService, companyRepositoryMock } = await loadCompanyService({
+      companyRepositoryOverrides: {
+        getByAdminUserId: jest.fn().mockResolvedValue({
+          id: 12,
+          name: "Resolve",
+          description: "Original",
+          cnpj: "12345678000199",
+        }),
+        listAdmins: jest.fn().mockResolvedValue(adminsResult),
+      },
+    });
+
+    const response = await companyService.getMyCompanyAdmins(9, {
+      search: "cilene",
+      adminRole: "primary",
+      page: 1,
+      pageSize: 10,
+    });
+
+    expect(companyRepositoryMock.listAdmins).toHaveBeenCalledWith(12, {
+      search: "cilene",
+      isPrimary: true,
+      limit: 10,
+      offset: 0,
+    });
+    expect(response.admins).toEqual([
+      expect.objectContaining({
+        id: 501,
+        name: "Cilene",
+        isPrimary: true,
+      }),
+    ]);
+    expect(response.pagination).toEqual({
+      page: 1,
+      pageSize: 10,
+      total: 1,
+      totalPages: 1,
+    });
+  });
+
   test("addMyCompanyAdmin creates the user when needed and links it as primary inside a transaction", async () => {
     const admins = [
       {
