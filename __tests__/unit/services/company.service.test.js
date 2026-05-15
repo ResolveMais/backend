@@ -15,6 +15,7 @@ const asModel = (data) => ({
 const loadCompanyService = async ({
   bcryptOverrides = {},
   companyRepositoryOverrides = {},
+  openAiCreateImplementation,
   ticketRepositoryOverrides = {},
   userRepositoryOverrides = {},
   transactionImplementation,
@@ -64,8 +65,43 @@ const loadCompanyService = async ({
       transactionImplementation || (async (callback) => callback("tx"))
     ),
   };
+  const openAiCreateMock = jest.fn(
+    openAiCreateImplementation ||
+      (async () => ({
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                headline: "Leitura da IA",
+                summary: "Resumo executivo gerado para a empresa.",
+                insights: [
+                  {
+                    title: "Sinal monitorado",
+                    tone: "warning",
+                    summary: "A IA encontrou um ponto relevante.",
+                    evidence: ["Há dados operacionais para revisão."],
+                    recommendedAction: "Revisar o indicador destacado.",
+                  },
+                ],
+              }),
+            },
+          },
+        ],
+      }))
+  );
 
   jest.unstable_mockModule("bcrypt", () => ({ default: bcryptMock }));
+  jest.unstable_mockModule("openai", () => ({
+    default: class OpenAI {
+      constructor() {
+        this.chat = {
+          completions: {
+            create: openAiCreateMock,
+          },
+        };
+      }
+    },
+  }));
   jest.unstable_mockModule("../../../app/repositories/company.repository.js", () => ({
     default: companyRepositoryMock,
   }));
@@ -87,6 +123,7 @@ const loadCompanyService = async ({
     companyService,
     bcryptMock,
     companyRepositoryMock,
+    openAiCreateMock,
     ticketRepositoryMock,
     userRepositoryMock,
     sequelizeMock,
@@ -100,6 +137,8 @@ describe("app/services/company.service", () => {
 
   afterEach(() => {
     jest.restoreAllMocks();
+    delete process.env.OPENAI_API_KEY;
+    delete process.env.OPENAI_COMPANY_INSIGHTS_MODEL;
   });
 
   test("getPublicCompanyDashboard computes public metrics, trust level and feedback highlights", async () => {
@@ -482,6 +521,128 @@ describe("app/services/company.service", () => {
       total: 1,
       totalPages: 1,
     });
+  });
+
+  test("getMyCompanyAiInsights uses the dedicated env model and returns structured insights", async () => {
+    process.env.OPENAI_API_KEY = "test-key";
+    process.env.OPENAI_COMPANY_INSIGHTS_MODEL = "gpt-4.1-mini";
+
+    const tickets = [
+      {
+        id: 1,
+        status: "pendente",
+        createdAt: "2026-05-12T10:00:00.000Z",
+        updatedAt: "2026-05-12T11:00:00.000Z",
+        customerRating: 2,
+        customerFeedback: "Demorou para responder",
+        customerEvaluatedAt: "2026-05-12T12:00:00.000Z",
+        resolutionSource: "human",
+        tituloReclamacao: { title: "Entrega" },
+        assignedEmployee: { id: 55, name: "Ana Martins", jobTitle: "Analista" },
+      },
+      {
+        id: 2,
+        status: "fechado",
+        createdAt: "2026-05-13T10:00:00.000Z",
+        updatedAt: "2026-05-13T12:00:00.000Z",
+        customerRating: 5,
+        customerFeedback: "Resolveu rápido",
+        customerEvaluatedAt: "2026-05-13T13:00:00.000Z",
+        resolutionSource: "human",
+        tituloReclamacao: { title: "Cobrança" },
+        assignedEmployee: { id: 55, name: "Ana Martins", jobTitle: "Analista" },
+      },
+    ];
+    const employees = [
+      asModel({
+        id: 55,
+        name: "Ana Martins",
+        email: "ana@example.com",
+        phone: "11999999999",
+        cpf: "12345678901",
+        avatarUrl: null,
+        jobTitle: "Analista",
+        userType: "funcionario",
+        companyId: 12,
+      }),
+    ];
+    const {
+      companyService,
+      openAiCreateMock,
+      userRepositoryMock,
+    } = await loadCompanyService({
+      companyRepositoryOverrides: {
+        getByAdminUserId: jest.fn().mockResolvedValue({
+          id: 12,
+          name: "Resolve Mais",
+          description: "Operação digital",
+          aiContext: "Priorizar gargalos de atendimento",
+          aiInstructions: "Ser objetivo",
+          aiExamples: "Exemplo interno",
+          cnpj: "12345678000199",
+        }),
+      },
+      ticketRepositoryOverrides: {
+        listByCompanyId: jest.fn().mockResolvedValue(tickets),
+      },
+      userRepositoryOverrides: {
+        listByCompanyAndType: jest.fn().mockResolvedValue(employees),
+      },
+      openAiCreateImplementation: async () => ({
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                headline: "Fila com atenção em satisfação",
+                summary:
+                  "A operação está concluindo tickets, mas as notas indicam variação de experiência no atendimento.",
+                insights: [
+                  {
+                    title: "Oscilação nas avaliações",
+                    tone: "warning",
+                    summary:
+                      "As notas recentes mostram diferença grande entre atendimentos bons e ruins.",
+                    evidence: [
+                      "Há avaliação 2/5 e 5/5 em tickets recentes.",
+                      "A mesma atendente concentrou os dois casos analisados.",
+                    ],
+                    recommendedAction:
+                      "Revisar os tickets com menor nota e padronizar o fluxo de resposta.",
+                  },
+                ],
+              }),
+            },
+          },
+        ],
+      }),
+    });
+
+    const response = await companyService.getMyCompanyAiInsights(9);
+
+    expect(userRepositoryMock.listByCompanyAndType).toHaveBeenCalledWith({
+      companyId: 12,
+      userType: "funcionario",
+      search: "",
+    });
+    expect(openAiCreateMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        model: "gpt-4.1-mini",
+        response_format: { type: "json_object" },
+      })
+    );
+    expect(response).toEqual(
+      expect.objectContaining({
+        status: 200,
+        model: "gpt-4.1-mini",
+        headline: "Fila com atenção em satisfação",
+        insights: [
+          expect.objectContaining({
+            title: "Oscilação nas avaliações",
+            tone: "warning",
+          }),
+        ],
+      })
+    );
   });
 
   test("addMyCompanyAdmin creates the user when needed and links it as primary inside a transaction", async () => {

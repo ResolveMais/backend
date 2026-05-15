@@ -1,3 +1,4 @@
+import OpenAI from "openai";
 import bcrypt from "bcrypt";
 import companyRepository from "../repositories/company.repository.js";
 import ticketRepository from "../repositories/ticket.repository.js";
@@ -16,6 +17,11 @@ const USER_TYPES = Object.freeze({
 const normalizeDigits = (value = "") => String(value).replace(/\D/g, "");
 const normalizeText = (value = "") => String(value).trim();
 const MAX_AI_PROFILE_FIELD_LENGTH = 4000;
+const OPENAI_COMPANY_INSIGHTS_MODEL =
+  process.env.OPENAI_COMPANY_INSIGHTS_MODEL ||
+  process.env.OPENAI_MODEL ||
+  "gpt-4.1-mini";
+const AI_INSIGHT_TONES = new Set(["success", "warning", "danger", "neutral"]);
 const PEOPLE_DEFAULT_PAGE = 1;
 const PEOPLE_DEFAULT_PAGE_SIZE = 5;
 const PEOPLE_MAX_PAGE_SIZE = 50;
@@ -86,6 +92,137 @@ const buildPaginationResponse = ({ page, pageSize }, total) => ({
   total,
   totalPages: Math.max(1, Math.ceil(total / pageSize)),
 });
+
+const createDateFromValue = (value) => {
+  if (!value) return null;
+
+  const parsedDate = new Date(value);
+  return Number.isNaN(parsedDate.getTime()) ? null : parsedDate;
+};
+
+const toIsoDateOrNull = (value) => {
+  const parsedDate = createDateFromValue(value);
+  return parsedDate ? parsedDate.toISOString() : null;
+};
+
+const normalizeInlineText = (value = "", maxLength = 220) => {
+  const normalizedValue = String(value || "").replace(/\s+/g, " ").trim();
+
+  if (normalizedValue.length <= maxLength) {
+    return normalizedValue;
+  }
+
+  return `${normalizedValue.slice(0, maxLength - 3).trim()}...`;
+};
+
+const formatInlineDecimal = (value) => {
+  const normalizedValue = String(value || "").replace(",", ".").trim();
+  const parsedValue = Number(normalizedValue);
+
+  if (Number.isNaN(parsedValue)) {
+    return String(value || "").trim();
+  }
+
+  return Number.isInteger(parsedValue)
+    ? String(parsedValue)
+    : parsedValue.toFixed(1).replace(".", ",");
+};
+
+const formatInlinePercent = (value) => {
+  const normalizedValue = formatInlineDecimal(value);
+  return normalizedValue ? `${normalizedValue}%` : "";
+};
+
+const humanizeAiInsightText = (value = "") => {
+  let normalizedValue = String(value || "").trim();
+
+  if (!normalizedValue) return "";
+
+  const formattedFieldPatterns = [
+    {
+      pattern: /\bcompletionRate\s*:\s*(\d+(?:[.,]\d+)?)/gi,
+      replacement: (_, fieldValue) =>
+        `taxa de conclusão: ${formatInlinePercent(fieldValue)}`,
+    },
+    {
+      pattern: /\baverageRating\s*:\s*(\d+(?:[.,]\d+)?)/gi,
+      replacement: (_, fieldValue) =>
+        `satisfação média: ${formatInlineDecimal(fieldValue)}`,
+    },
+    {
+      pattern: /\bcreatedToday\s*:\s*(\d+)/gi,
+      replacement: (_, fieldValue) => `tickets criados hoje: ${fieldValue}`,
+    },
+    {
+      pattern: /\btotalTickets\s*:\s*(\d+)/gi,
+      replacement: (_, fieldValue) => `total de tickets: ${fieldValue}`,
+    },
+    {
+      pattern: /\bopenTickets\s*:\s*(\d+)/gi,
+      replacement: (_, fieldValue) => `tickets abertos: ${fieldValue}`,
+    },
+    {
+      pattern: /\binProgressTickets\s*:\s*(\d+)/gi,
+      replacement: (_, fieldValue) => `tickets em atendimento: ${fieldValue}`,
+    },
+    {
+      pattern: /\bresolvedTickets\s*:\s*(\d+)/gi,
+      replacement: (_, fieldValue) => `tickets resolvidos: ${fieldValue}`,
+    },
+    {
+      pattern: /\bclosedTickets\s*:\s*(\d+)/gi,
+      replacement: (_, fieldValue) => `tickets fechados: ${fieldValue}`,
+    },
+    {
+      pattern: /\bunassignedTickets\s*:\s*(\d+)/gi,
+      replacement: (_, fieldValue) => `tickets sem responsável: ${fieldValue}`,
+    },
+    {
+      pattern: /\btotalRatings\s*:\s*(\d+)/gi,
+      replacement: (_, fieldValue) => `avaliações registradas: ${fieldValue}`,
+    },
+    {
+      pattern: /\bteamSize\s*:\s*(\d+)/gi,
+      replacement: (_, fieldValue) => `colaboradores analisados: ${fieldValue}`,
+    },
+    {
+      pattern: /\bteamWithTickets\s*:\s*(\d+)/gi,
+      replacement: (_, fieldValue) =>
+        `colaboradores com tickets atribuídos: ${fieldValue}`,
+    },
+  ];
+
+  formattedFieldPatterns.forEach(({ pattern, replacement }) => {
+    normalizedValue = normalizedValue.replace(pattern, replacement);
+  });
+
+  const rawFieldLabels = [
+    ["completionRate", "taxa de conclusão"],
+    ["averageRating", "satisfação média"],
+    ["createdToday", "tickets criados hoje"],
+    ["totalTickets", "total de tickets"],
+    ["openTickets", "tickets abertos"],
+    ["inProgressTickets", "tickets em atendimento"],
+    ["resolvedTickets", "tickets resolvidos"],
+    ["closedTickets", "tickets fechados"],
+    ["unassignedTickets", "tickets sem responsável"],
+    ["totalRatings", "avaliações registradas"],
+    ["teamSize", "colaboradores analisados"],
+    ["teamWithTickets", "colaboradores com tickets atribuídos"],
+  ];
+
+  rawFieldLabels.forEach(([fieldName, label]) => {
+    normalizedValue = normalizedValue.replace(
+      new RegExp(`\\b${fieldName}\\b`, "g"),
+      label
+    );
+  });
+
+  return normalizedValue
+    .replace(/\s{2,}/g, " ")
+    .replace(/(\S)\s+satisfação média:/gi, "$1 - satisfação média:")
+    .trim();
+};
 
 const formatCompanySnapshot = (company, { includeAiSettings = false } = {}) => {
   const snapshot = {
@@ -214,6 +351,474 @@ const buildEvaluationHighlights = (tickets) => {
       reviewerLabel: getPublicReviewerLabel(ticket.cliente),
       complaintTitle: ticket.tituloReclamacao?.title || "Sem assunto",
     }));
+};
+
+const getTicketLastActivity = (ticket) => {
+  const timestamps = [
+    ticket.updatedAt,
+    ticket.closedAt,
+    ticket.resolvedAt,
+    ticket.createdAt,
+  ]
+    .map(createDateFromValue)
+    .filter(Boolean)
+    .map((date) => date.getTime());
+
+  if (timestamps.length === 0) return null;
+
+  return new Date(Math.max(...timestamps));
+};
+
+const buildEmployeeAiMetrics = (employees, tickets) => {
+  const employeeRegistry = new Map();
+
+  (Array.isArray(employees) ? employees : []).forEach((employee) => {
+    employeeRegistry.set(String(employee.id), employee);
+  });
+
+  tickets.forEach((ticket) => {
+    if (!ticket?.assignedEmployee?.id) return;
+
+    if (!employeeRegistry.has(String(ticket.assignedEmployee.id))) {
+      employeeRegistry.set(String(ticket.assignedEmployee.id), ticket.assignedEmployee);
+    }
+  });
+
+  return Array.from(employeeRegistry.values())
+    .map((employee) => {
+      const assignedTickets = tickets.filter(
+        (ticket) =>
+          String(ticket.assignedEmployee?.id || "") === String(employee.id)
+      );
+      const activeTickets = assignedTickets.filter((ticket) =>
+        [TICKET_STATUS.ABERTO, TICKET_STATUS.PENDENTE, TICKET_STATUS.RESOLVIDO].includes(
+          normalizeTicketStatus(ticket.status)
+        )
+      );
+      const pendingTickets = assignedTickets.filter(
+        (ticket) => normalizeTicketStatus(ticket.status) === TICKET_STATUS.PENDENTE
+      );
+      const concludedTickets = assignedTickets.filter((ticket) =>
+        [TICKET_STATUS.RESOLVIDO, TICKET_STATUS.FECHADO].includes(
+          normalizeTicketStatus(ticket.status)
+        )
+      );
+      const ratings = assignedTickets
+        .map((ticket) => Number(ticket.customerRating || 0))
+        .filter((rating) => rating > 0);
+      const averageRating =
+        ratings.length > 0
+          ? Number(
+              (
+                ratings.reduce((accumulator, rating) => accumulator + rating, 0) /
+                ratings.length
+              ).toFixed(1)
+            )
+          : null;
+      const completionRate =
+        assignedTickets.length > 0
+          ? Math.round((concludedTickets.length / assignedTickets.length) * 100)
+          : 0;
+      const lastActivity = assignedTickets
+        .map(getTicketLastActivity)
+        .filter(Boolean)
+        .sort((left, right) => right.getTime() - left.getTime())[0] || null;
+      const reasons = [];
+
+      if (pendingTickets.length >= 3) {
+        reasons.push("Fila pendente alta");
+      }
+
+      if (
+        activeTickets.length >= 2 &&
+        activeTickets.length >= concludedTickets.length + 2
+      ) {
+        reasons.push("Mais tickets ativos do que concluídos");
+      }
+
+      if (averageRating !== null && averageRating < 4) {
+        reasons.push("Satisfação abaixo do ideal");
+      }
+
+      if (concludedTickets.length === 0 && activeTickets.length >= 2) {
+        reasons.push("Sem tickets concluídos na carteira");
+      }
+
+      return {
+        id: employee.id,
+        name: employee.name || "Funcionário",
+        jobTitle: employee.jobTitle || null,
+        assignedCount: assignedTickets.length,
+        activeCount: activeTickets.length,
+        pendingCount: pendingTickets.length,
+        concludedCount: concludedTickets.length,
+        ratingCount: ratings.length,
+        averageRating,
+        completionRate,
+        attentionReasons: reasons.slice(0, 2),
+        lastActivity: lastActivity ? lastActivity.toISOString() : null,
+      };
+    })
+    .sort((left, right) => {
+      if (right.concludedCount !== left.concludedCount) {
+        return right.concludedCount - left.concludedCount;
+      }
+
+      if ((right.averageRating || 0) !== (left.averageRating || 0)) {
+        return (right.averageRating || 0) - (left.averageRating || 0);
+      }
+
+      if (right.activeCount !== left.activeCount) {
+        return right.activeCount - left.activeCount;
+      }
+
+      return String(left.name || "").localeCompare(String(right.name || ""));
+    });
+};
+
+const buildCompanyAiSnapshot = ({ company, tickets, employees }) => {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const openTickets = tickets.filter(
+    (ticket) => normalizeTicketStatus(ticket.status) === TICKET_STATUS.ABERTO
+  ).length;
+  const inProgressTickets = tickets.filter(
+    (ticket) => normalizeTicketStatus(ticket.status) === TICKET_STATUS.PENDENTE
+  ).length;
+  const resolvedTickets = tickets.filter(
+    (ticket) => normalizeTicketStatus(ticket.status) === TICKET_STATUS.RESOLVIDO
+  ).length;
+  const closedTickets = tickets.filter(
+    (ticket) => normalizeTicketStatus(ticket.status) === TICKET_STATUS.FECHADO
+  ).length;
+  const activeTickets = tickets.filter((ticket) =>
+    [TICKET_STATUS.ABERTO, TICKET_STATUS.PENDENTE, TICKET_STATUS.RESOLVIDO].includes(
+      normalizeTicketStatus(ticket.status)
+    )
+  ).length;
+  const unassignedTickets = tickets.filter((ticket) => {
+    const normalizedStatus = normalizeTicketStatus(ticket.status);
+
+    return (
+      [TICKET_STATUS.ABERTO, TICKET_STATUS.PENDENTE, TICKET_STATUS.RESOLVIDO].includes(
+        normalizedStatus
+      ) && !ticket.assignedEmployee?.id
+    );
+  }).length;
+  const createdToday = tickets.filter((ticket) => {
+    const createdAt = createDateFromValue(ticket.createdAt);
+
+    if (!createdAt) return false;
+
+    const normalizedDate = new Date(createdAt);
+    normalizedDate.setHours(0, 0, 0, 0);
+    return normalizedDate.getTime() === today.getTime();
+  }).length;
+  const ratedTickets = tickets.filter((ticket) => Number(ticket.customerRating || 0) > 0);
+  const totalRatings = ratedTickets.length;
+  const averageRating =
+    totalRatings > 0
+      ? Number(
+          (
+            ratedTickets.reduce(
+              (accumulator, ticket) => accumulator + Number(ticket.customerRating || 0),
+              0
+            ) / totalRatings
+          ).toFixed(1)
+        )
+      : null;
+  const ratingDistribution = {
+    1: ratedTickets.filter((ticket) => Number(ticket.customerRating) === 1).length,
+    2: ratedTickets.filter((ticket) => Number(ticket.customerRating) === 2).length,
+    3: ratedTickets.filter((ticket) => Number(ticket.customerRating) === 3).length,
+    4: ratedTickets.filter((ticket) => Number(ticket.customerRating) === 4).length,
+    5: ratedTickets.filter((ticket) => Number(ticket.customerRating) === 5).length,
+  };
+  const recentVolume = Array.from({ length: 7 }, (_, index) => {
+    const currentDay = new Date(today);
+    currentDay.setDate(today.getDate() - (6 - index));
+
+    const ticketsCreatedOnDay = tickets.filter((ticket) => {
+      const createdAt = createDateFromValue(ticket.createdAt);
+
+      if (!createdAt) return false;
+
+      const normalizedDate = new Date(createdAt);
+      normalizedDate.setHours(0, 0, 0, 0);
+
+      return normalizedDate.getTime() === currentDay.getTime();
+    }).length;
+
+    return {
+      date: currentDay.toISOString().slice(0, 10),
+      count: ticketsCreatedOnDay,
+    };
+  });
+  const topSubjects = Array.from(
+    tickets.reduce((accumulator, ticket) => {
+      const subject = ticket.tituloReclamacao?.title || "Sem assunto";
+      accumulator.set(subject, (accumulator.get(subject) || 0) + 1);
+      return accumulator;
+    }, new Map()).entries()
+  )
+    .map(([subject, count]) => ({
+      subject,
+      count,
+      share:
+        tickets.length > 0
+          ? Math.round((count / tickets.length) * 100)
+          : 0,
+    }))
+    .sort((left, right) => right.count - left.count)
+    .slice(0, 5);
+
+  const employeeMetrics = buildEmployeeAiMetrics(employees, tickets);
+
+  return {
+    company: {
+      id: company.id,
+      name: company.name,
+      description: normalizeInlineText(company.description || "", 240) || null,
+      aiContext: normalizeInlineText(company.aiContext || "", 320) || null,
+      aiInstructions: normalizeInlineText(company.aiInstructions || "", 320) || null,
+      aiExamples: normalizeInlineText(company.aiExamples || "", 320) || null,
+    },
+    summary: {
+      totalTickets: tickets.length,
+      openTickets,
+      inProgressTickets,
+      resolvedTickets,
+      closedTickets,
+      activeTickets,
+      unassignedTickets,
+      createdToday,
+      totalRatings,
+      averageRating,
+      completionRate:
+        tickets.length > 0
+          ? Math.round(((resolvedTickets + closedTickets) / tickets.length) * 100)
+          : 0,
+      teamSize: employees.length,
+      teamWithTickets: employeeMetrics.filter((employee) => employee.assignedCount > 0)
+        .length,
+      ratingDistribution,
+      trustLevel: getTrustLevel({ averageRating, ratingCount: totalRatings }),
+    },
+    topSubjects,
+    recentVolume,
+    employeeHighlights: employeeMetrics.slice(0, 5),
+    attentionEmployees: employeeMetrics
+      .filter(
+        (employee) =>
+          employee.assignedCount > 0 && employee.attentionReasons.length > 0
+      )
+      .slice(0, 4),
+    recentTickets: [...tickets]
+      .sort((left, right) => {
+        const leftTime = createDateFromValue(left.createdAt)?.getTime() || 0;
+        const rightTime = createDateFromValue(right.createdAt)?.getTime() || 0;
+
+        return rightTime - leftTime;
+      })
+      .slice(0, 6)
+      .map((ticket) => ({
+        id: ticket.id,
+        status: normalizeTicketStatus(ticket.status),
+        subject: ticket.tituloReclamacao?.title || "Sem assunto",
+        assignedEmployee: ticket.assignedEmployee?.name || null,
+        createdAt: toIsoDateOrNull(ticket.createdAt),
+        updatedAt: toIsoDateOrNull(ticket.updatedAt),
+        rating: Number(ticket.customerRating || 0) || null,
+      })),
+    recentReviews: ratedTickets
+      .sort((left, right) => {
+        const leftTime =
+          createDateFromValue(
+            left.customerEvaluatedAt || left.updatedAt || left.createdAt
+          )?.getTime() || 0;
+        const rightTime =
+          createDateFromValue(
+            right.customerEvaluatedAt || right.updatedAt || right.createdAt
+          )?.getTime() || 0;
+
+        return rightTime - leftTime;
+      })
+      .slice(0, 6)
+      .map((ticket) => ({
+        ticketId: ticket.id,
+        subject: ticket.tituloReclamacao?.title || "Sem assunto",
+        rating: Number(ticket.customerRating || 0),
+        comment: normalizeInlineText(ticket.customerFeedback || "", 180) || null,
+        resolutionSource: ticket.resolutionSource || null,
+        assignedEmployee: ticket.assignedEmployee?.name || null,
+        submittedAt: toIsoDateOrNull(
+          ticket.customerEvaluatedAt || ticket.updatedAt || ticket.createdAt
+        ),
+      })),
+  };
+};
+
+const extractJsonObject = (value = "") => {
+  const normalizedValue = String(value || "").trim();
+
+  if (!normalizedValue) {
+    throw new Error("Resposta vazia da IA.");
+  }
+
+  const fencedJsonMatch = normalizedValue.match(/```json\s*([\s\S]*?)```/i);
+
+  if (fencedJsonMatch?.[1]) {
+    return fencedJsonMatch[1].trim();
+  }
+
+  const firstBraceIndex = normalizedValue.indexOf("{");
+  const lastBraceIndex = normalizedValue.lastIndexOf("}");
+
+  if (firstBraceIndex === -1 || lastBraceIndex === -1 || lastBraceIndex <= firstBraceIndex) {
+    throw new Error("A resposta da IA não retornou JSON válido.");
+  }
+
+  return normalizedValue.slice(firstBraceIndex, lastBraceIndex + 1);
+};
+
+const sanitizeAiInsightItem = (insight, index) => {
+  if (!insight || typeof insight !== "object") return null;
+
+  const tone = AI_INSIGHT_TONES.has(insight.tone) ? insight.tone : "neutral";
+  const title =
+    normalizeInlineText(humanizeAiInsightText(insight.title || ""), 90) ||
+    `Insight ${index + 1}`;
+  const summary =
+    normalizeInlineText(humanizeAiInsightText(insight.summary || ""), 220) ||
+    "A IA não conseguiu resumir este ponto com clareza.";
+  const evidence = (Array.isArray(insight.evidence) ? insight.evidence : [])
+    .map((item) => normalizeInlineText(humanizeAiInsightText(item), 140))
+    .filter(Boolean)
+    .slice(0, 3);
+  const recommendedAction =
+    normalizeInlineText(
+      humanizeAiInsightText(insight.recommendedAction || ""),
+      180
+    ) ||
+    "Revisar esse indicador no detalhe para decidir a próxima ação.";
+
+  return {
+    title,
+    tone,
+    summary,
+    evidence,
+    recommendedAction,
+  };
+};
+
+const parseCompanyAiInsights = (rawContent) => {
+  const parsedPayload = JSON.parse(extractJsonObject(rawContent));
+  const headline =
+    normalizeInlineText(
+      humanizeAiInsightText(parsedPayload.headline || ""),
+      120
+    ) ||
+    "Leitura operacional da IA";
+  const summary =
+    normalizeInlineText(
+      humanizeAiInsightText(parsedPayload.summary || ""),
+      260
+    ) ||
+    "A IA analisou os dados operacionais mais recentes da empresa.";
+  const insights = (Array.isArray(parsedPayload.insights) ? parsedPayload.insights : [])
+    .map((insight, index) => sanitizeAiInsightItem(insight, index))
+    .filter(Boolean)
+    .slice(0, 3);
+
+  return {
+    headline,
+    summary,
+    insights,
+  };
+};
+
+const generateMyCompanyAiInsights = async ({ company, tickets, employees }) => {
+  const apiKey = process.env.OPENAI_API_KEY;
+
+  if (!apiKey) {
+    return {
+      status: 503,
+      message: "Variável OPENAI_API_KEY não configurada para gerar insights da empresa.",
+    };
+  }
+
+  const snapshot = buildCompanyAiSnapshot({ company, tickets, employees });
+
+  if (snapshot.summary.totalTickets === 0) {
+    return {
+      status: 200,
+      headline: "Ainda não há base operacional suficiente",
+      summary:
+        "Quando a empresa começar a receber tickets, a IA poderá apontar padrões de fila, satisfação e distribuição da equipe.",
+      insights: [],
+      generatedAt: new Date().toISOString(),
+      model: OPENAI_COMPANY_INSIGHTS_MODEL,
+      sourceData: {
+        ticketsAnalyzed: 0,
+        employeesAnalyzed: employees.length,
+      },
+    };
+  }
+
+  try {
+    const openai = new OpenAI({ apiKey });
+    const completion = await openai.chat.completions.create({
+      model: OPENAI_COMPANY_INSIGHTS_MODEL,
+      temperature: 0.4,
+      response_format: { type: "json_object" },
+      messages: [
+        {
+          role: "system",
+          content: [
+            "Você é um analista operacional do Resolve Mais.",
+            "Sua tarefa é ler um snapshot de atendimento e devolver JSON puro em português do Brasil.",
+            "Baseie-se apenas nos dados recebidos.",
+            "Não invente métricas, causas, prazos ou comportamentos que não estejam no snapshot.",
+            "Priorize leitura executiva, riscos, sinais de eficiência e oportunidades práticas.",
+            "Nunca exponha nomes técnicos de campos, chaves camelCase ou labels internas do snapshot.",
+            "Não escreva termos como averageRating, completionRate, totalTickets, createdToday, teamSize ou qualquer outro nome de propriedade.",
+            "Traduza sempre os dados para linguagem natural, por exemplo: 'satisfação média', 'taxa de conclusão', 'tickets criados hoje' e 'total de tickets'.",
+            "Se mencionar uma pessoa, escreva a conclusão em frase natural, sem colar o nome do campo ao lado do nome dela.",
+            "Retorne exatamente este formato:",
+            '{ "headline": "string", "summary": "string", "insights": [{ "title": "string", "tone": "success|warning|danger|neutral", "summary": "string", "evidence": ["string"], "recommendedAction": "string" }] }',
+            "Gere no máximo 3 insights.",
+          ].join("\n"),
+        },
+        {
+          role: "user",
+          content: JSON.stringify(snapshot, null, 2),
+        },
+      ],
+    });
+
+    const rawContent = completion?.choices?.[0]?.message?.content || "";
+    const parsedInsights = parseCompanyAiInsights(rawContent);
+
+    return {
+      status: 200,
+      ...parsedInsights,
+      generatedAt: new Date().toISOString(),
+      model: OPENAI_COMPANY_INSIGHTS_MODEL,
+      sourceData: {
+        ticketsAnalyzed: snapshot.summary.totalTickets,
+        employeesAnalyzed: snapshot.summary.teamSize,
+      },
+    };
+  } catch (error) {
+    console.error("Erro ao gerar insights da empresa com IA:", error);
+
+    return {
+      status: 502,
+      message:
+        "Não foi possível gerar a leitura da IA para os insights da empresa agora.",
+    };
+  }
 };
 
 const getCompanyFromAdminUser = async (userId) => {
@@ -457,6 +1062,24 @@ const getMyCompanyEmployees = async (authUserId, listOptions = {}) => {
   }
 
   return response;
+};
+
+const getMyCompanyAiInsights = async (authUserId) => {
+  const context = await getCompanyDataForAdmin(authUserId);
+  if (context.error) return context.error;
+
+  const [rawTickets, employeesResult] = await Promise.all([
+    ticketRepository.listByCompanyId({ companyId: context.company.id }),
+    getCompanyEmployees(context.company.id),
+  ]);
+  const tickets = rawTickets.map((ticket) => toPlain(ticket));
+  const employees = Array.isArray(employeesResult) ? employeesResult : [];
+
+  return generateMyCompanyAiInsights({
+    company: context.company,
+    tickets,
+    employees,
+  });
 };
 
 const getMyCompanyComplaintTitles = async (authUserId) => {
@@ -971,6 +1594,7 @@ export {
   getAllCompanies,
   getPublicCompanyDashboard,
   getMyCompanyAdmins,
+  getMyCompanyAiInsights,
   getMyCompanyComplaintTitles,
   getMyCompanyEmployees,
   removeMyCompanyAdmin,
@@ -985,6 +1609,7 @@ export default {
   getAllCompanies,
   getPublicCompanyDashboard,
   getMyCompanyAdmins,
+  getMyCompanyAiInsights,
   getMyCompanyEmployees,
   getMyCompanyComplaintTitles,
   updateMyCompanyProfile,

@@ -75,6 +75,7 @@ JWT_ALGORITHM=HS256
 # OPENAI
 OPENAI_API_KEY=sua_chave_openai
 OPENAI_MODEL=gpt-4.1-nano
+OPENAI_COMPANY_INSIGHTS_MODEL=gpt-4.1-mini
 
 # SERVER
 PORT=3001
@@ -151,7 +152,7 @@ O token JWT usado pela aplicação é assinado com `ACCESS_TOKEN_SECRET`. O camp
 
 ### Opcionais por funcionalidade
 
-- `OPENAI_API_KEY` e `OPENAI_MODEL`: necessários para o chatbot
+- `OPENAI_API_KEY`, `OPENAI_MODEL` e `OPENAI_COMPANY_INSIGHTS_MODEL`: necessários para chatbot e insights com IA
 - `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_SECURE`, `MAIL_FROM`: necessários para envio de e-mails
 - `RESET_PASSWORD_EXPIRES_MINUTES`: validade do link de redefinição de senha
 - `TICKET_AUTOMATION_INTERVAL_MS`: intervalo da automação de tickets
