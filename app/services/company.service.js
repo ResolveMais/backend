@@ -108,12 +108,19 @@ const toIsoDateOrNull = (value) => {
 const normalizeInlineText = (value = "", maxLength = 220) => {
   const normalizedValue = String(value || "").replace(/\s+/g, " ").trim();
 
+  if (!Number.isFinite(maxLength) || maxLength <= 0) {
+    return normalizedValue;
+  }
+
   if (normalizedValue.length <= maxLength) {
     return normalizedValue;
   }
 
   return `${normalizedValue.slice(0, maxLength - 3).trim()}...`;
 };
+
+const normalizeInlineTextWithoutLimit = (value = "") =>
+  normalizeInlineText(value, Number.POSITIVE_INFINITY);
 
 const formatInlineDecimal = (value) => {
   const normalizedValue = String(value || "").replace(",", ".").trim();
@@ -687,19 +694,20 @@ const sanitizeAiInsightItem = (insight, index) => {
 
   const tone = AI_INSIGHT_TONES.has(insight.tone) ? insight.tone : "neutral";
   const title =
-    normalizeInlineText(humanizeAiInsightText(insight.title || ""), 90) ||
+    normalizeInlineTextWithoutLimit(humanizeAiInsightText(insight.title || "")) ||
     `Insight ${index + 1}`;
   const summary =
-    normalizeInlineText(humanizeAiInsightText(insight.summary || ""), 220) ||
+    normalizeInlineTextWithoutLimit(humanizeAiInsightText(insight.summary || "")) ||
     "A IA não conseguiu resumir este ponto com clareza.";
   const evidence = (Array.isArray(insight.evidence) ? insight.evidence : [])
-    .map((item) => normalizeInlineText(humanizeAiInsightText(item), 140))
+    .map((item) =>
+      normalizeInlineTextWithoutLimit(humanizeAiInsightText(item))
+    )
     .filter(Boolean)
     .slice(0, 3);
   const recommendedAction =
-    normalizeInlineText(
+    normalizeInlineTextWithoutLimit(
       humanizeAiInsightText(insight.recommendedAction || ""),
-      180
     ) ||
     "Revisar esse indicador no detalhe para decidir a próxima ação.";
 
@@ -715,15 +723,13 @@ const sanitizeAiInsightItem = (insight, index) => {
 const parseCompanyAiInsights = (rawContent) => {
   const parsedPayload = JSON.parse(extractJsonObject(rawContent));
   const headline =
-    normalizeInlineText(
+    normalizeInlineTextWithoutLimit(
       humanizeAiInsightText(parsedPayload.headline || ""),
-      120
     ) ||
     "Leitura operacional da IA";
   const summary =
-    normalizeInlineText(
+    normalizeInlineTextWithoutLimit(
       humanizeAiInsightText(parsedPayload.summary || ""),
-      260
     ) ||
     "A IA analisou os dados operacionais mais recentes da empresa.";
   const insights = (Array.isArray(parsedPayload.insights) ? parsedPayload.insights : [])
