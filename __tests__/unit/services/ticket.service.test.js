@@ -369,6 +369,91 @@ describe("app/services/ticket.service", () => {
     });
   });
 
+  test("getWorkspaceTickets allows company admins to list closed tickets in the workspace", async () => {
+    const closedTicket = {
+      id: 4,
+      status: "fechado",
+      description: "Chamado encerrado",
+      customerRating: 4,
+      assignedUserId: 55,
+      assignedEmployee: { id: 55, name: "Atendente A" },
+      empresa: { id: 22, name: "Resolve Mais" },
+      tituloReclamacao: { id: 13, title: "Financeiro" },
+      cliente: { id: 8, name: "Paula" },
+    };
+    const activeTicket = {
+      id: 5,
+      status: "aberto",
+      description: "Chamado ativo",
+      empresa: { id: 22, name: "Resolve Mais" },
+      tituloReclamacao: { id: 14, title: "Cadastro" },
+      cliente: { id: 9, name: "Carlos" },
+    };
+    const { ticketService, ticketRepositoryMock } = await loadTicketService({
+      companyRepositoryOverrides: {
+        getByAdminUserId: jest.fn().mockResolvedValue({ id: 22, name: "Resolve Mais" }),
+      },
+      ticketRepositoryOverrides: {
+        listByCompanyId: jest
+          .fn()
+          .mockResolvedValueOnce([closedTicket])
+          .mockResolvedValueOnce([closedTicket, activeTicket]),
+      },
+    });
+
+    const response = await ticketService.getWorkspaceTickets(
+      { id: 1, name: "Admin", userType: "empresa" },
+      { scope: "closed" }
+    );
+
+    expect(ticketRepositoryMock.listByCompanyId).toHaveBeenNthCalledWith(1, {
+      companyId: 22,
+      statuses: ["fechado"],
+    });
+    expect(response).toEqual(
+      expect.objectContaining({
+        status: 200,
+        scope: "company_admin",
+        workspaceScope: "closed",
+      })
+    );
+    expect(response.tickets.map((ticket) => ticket.id)).toEqual([4]);
+    expect(response.summary).toEqual(
+      expect.objectContaining({
+        total: 2,
+        aberto: 1,
+        fechado: 1,
+        averageRating: 4,
+        ratingCount: 1,
+      })
+    );
+  });
+
+  test("getWorkspaceTickets blocks employees from listing closed tickets in the workspace", async () => {
+    const { ticketService, ticketRepositoryMock } = await loadTicketService({
+      companyRepositoryOverrides: {
+        getByAdminUserId: jest.fn().mockResolvedValue(null),
+        getById: jest.fn().mockResolvedValue({ id: 22, name: "Resolve Mais" }),
+      },
+    });
+
+    const response = await ticketService.getWorkspaceTickets(
+      {
+        id: 55,
+        userType: "funcionario",
+        companyId: 22,
+      },
+      { scope: "closed" }
+    );
+
+    expect(response).toEqual({
+      status: 403,
+      message:
+        "Apenas o administrador da empresa pode visualizar tickets finalizados nesta tela.",
+    });
+    expect(ticketRepositoryMock.listByCompanyId).not.toHaveBeenCalled();
+  });
+
   test("sendTicketMessage enforces channel rules and marks the counterpart as read when connected", async () => {
     const customerTicket = {
       id: 91,

@@ -798,18 +798,33 @@ const getWorkspaceTickets = async (authUser, { scope = "active" } = {}) => {
     const context = await getSupportContext(authUser);
     if (context.error) return context.error;
 
-    const statusFilter =
+    const normalizedScope =
       scope === "closed"
-        ? [TICKET_STATUS.FECHADO]
+        ? "closed"
         : scope === "all"
+          ? "all"
+          : "active";
+
+    if (normalizedScope === "closed" && context.scope !== "company_admin") {
+      return {
+        status: 403,
+        message:
+          "Apenas o administrador da empresa pode visualizar tickets finalizados nesta tela.",
+      };
+    }
+
+    const statusFilter =
+      normalizedScope === "closed"
+        ? [TICKET_STATUS.FECHADO]
+        : normalizedScope === "all"
           ? null
           : ACTIVE_TICKET_STATUSES;
 
     const rawTickets =
       context.scope === "customer"
-        ? scope === "closed"
+        ? normalizedScope === "closed"
           ? await ticketRepository.getClosedByUserId(context.user.id)
-          : scope === "all"
+          : normalizedScope === "all"
             ? await ticketRepository.getByUserId(context.user.id)
             : await ticketRepository.getOpenAndPendingByUserId(context.user.id)
         : await ticketRepository.listByCompanyId({
@@ -834,6 +849,7 @@ const getWorkspaceTickets = async (authUser, { scope = "active" } = {}) => {
     return {
       status: 200,
       scope: context.scope,
+      workspaceScope: normalizedScope,
       company: context.company
         ? {
           id: context.company.id,
