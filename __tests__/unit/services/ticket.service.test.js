@@ -615,6 +615,83 @@ describe("app/services/ticket.service", () => {
     expect(response.status).toBe(200);
   });
 
+  test("updateTicketAssignment allows the assigned employee to redirect a pending ticket to another employee", async () => {
+    const originalTicket = {
+      id: 61,
+      status: "pendente",
+      description: "Precisa de outra área",
+      empresa: { id: 22, name: "Resolve Mais" },
+      tituloReclamacao: { id: 10, title: "Cobrança" },
+      cliente: { id: 4, name: "Maria" },
+      assignedUserId: 55,
+      assignedEmployee: { id: 55, name: "Atendente A", userType: "funcionario" },
+      acceptedAt: "2026-04-30T10:00:00.000Z",
+    };
+    const updatedTicket = {
+      ...originalTicket,
+      assignedUserId: 56,
+      assignedEmployee: { id: 56, name: "Atendente B", userType: "funcionario" },
+    };
+    const { ticketService, ticketRepositoryMock, userRepositoryMock, realtimeMock } =
+      await loadTicketService({
+        companyRepositoryOverrides: {
+          getByAdminUserId: jest.fn().mockResolvedValue(null),
+          getById: jest.fn().mockResolvedValue({ id: 22, name: "Resolve Mais" }),
+        },
+        ticketRepositoryOverrides: {
+          getByIdForCompany: jest
+            .fn()
+            .mockResolvedValueOnce(originalTicket)
+            .mockResolvedValueOnce(updatedTicket),
+          createUpdate: jest.fn().mockResolvedValueOnce({ id: 20, type: "assignment" }),
+        },
+        userRepositoryOverrides: {
+          getById: jest.fn().mockResolvedValue({
+            id: 56,
+            name: "Atendente B",
+            userType: "funcionario",
+            companyId: 22,
+            email: "atendente-b@example.com",
+          }),
+        },
+        chatbotRepositoryOverrides: {
+          getOrCreateConversationByTicket: jest.fn().mockResolvedValue({ id: 91 }),
+          createMessage: jest.fn().mockResolvedValue({
+            id: 92,
+            role: "system",
+            content: "Ticket redirecionado",
+            senderType: "sistema",
+            senderName: "Resolve Mais",
+            createdAt: "2026-04-30T10:00:00.000Z",
+          }),
+        },
+      });
+
+    const response = await ticketService.updateTicketAssignment(
+      { id: 55, name: "Atendente A", userType: "funcionario", companyId: 22 },
+      61,
+      56
+    );
+
+    expect(userRepositoryMock.getById).toHaveBeenCalledWith(56);
+    expect(ticketRepositoryMock.updateTicketById).toHaveBeenCalledWith(
+      61,
+      expect.objectContaining({
+        assignedUserId: 56,
+        status: "pendente",
+      })
+    );
+    expect(realtimeMock.broadcastTicketEvent).toHaveBeenCalledTimes(3);
+    expect(response).toEqual(
+      expect.objectContaining({
+        status: 200,
+        message: "Ticket redirecionado com sucesso.",
+        ticket: null,
+        ticketStillVisibleToRequester: false,
+      })
+    );
+  });
+
   test("updateTicketStatus enforces role-based transitions and persists resolution metadata", async () => {
     const customerTicket = {
       id: 70,

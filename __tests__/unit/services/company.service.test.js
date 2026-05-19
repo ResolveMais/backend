@@ -464,6 +464,69 @@ describe("app/services/company.service", () => {
     });
   });
 
+  test("getMyCompanyEmployees also allows an employee linked to the company", async () => {
+    const employeesResult = {
+      count: 1,
+      rows: [
+        asModel({
+          id: 71,
+          name: "Bruna Costa",
+          email: "bruna@example.com",
+          phone: "11988887777",
+          cpf: "98765432100",
+          avatarUrl: null,
+          jobTitle: "Suporte",
+          userType: "funcionario",
+          companyId: 12,
+        }),
+      ],
+    };
+    const { companyService, userRepositoryMock } = await loadCompanyService({
+      companyRepositoryOverrides: {
+        getById: jest.fn().mockResolvedValue({
+          id: 12,
+          name: "Resolve",
+          description: "Original",
+          cnpj: "12345678000199",
+        }),
+      },
+      userRepositoryOverrides: {
+        getById: jest.fn().mockResolvedValue({
+          id: 77,
+          name: "Atendente A",
+          email: "atendente@example.com",
+          phone: "11999999999",
+          cpf: "12345678901",
+          avatarUrl: null,
+          jobTitle: "Suporte",
+          userType: "funcionario",
+          companyId: 12,
+        }),
+        listByCompanyAndType: jest.fn().mockResolvedValue(employeesResult),
+      },
+    });
+
+    const response = await companyService.getMyCompanyEmployees(
+      { id: 77, userType: "funcionario", companyId: 12 },
+      { page: 1, pageSize: 10 }
+    );
+
+    expect(userRepositoryMock.listByCompanyAndType).toHaveBeenCalledWith({
+      companyId: 12,
+      userType: "funcionario",
+      search: "",
+      limit: 10,
+      offset: 0,
+    });
+    expect(response.status).toBe(200);
+    expect(response.employees).toEqual([
+      expect.objectContaining({
+        id: 71,
+        name: "Bruna Costa",
+      }),
+    ]);
+  });
+
   test("getMyCompanyAdmins applies search, role filter and pagination", async () => {
     const adminsResult = {
       count: 1,

@@ -187,6 +187,10 @@ const buildTicketPermissions = (ticket, context) => {
   const isCompanyAdmin = context.scope === "company_admin";
   const isAssignedEmployee = isTicketAssignedToUser(ticket, context.user.id);
   const canEmployeeAct = isEmployee && (!ticket.assignedUserId || isAssignedEmployee);
+  const canAssignedEmployeeReassign =
+    isEmployee &&
+    isAssignedEmployee &&
+    normalizedStatus === TICKET_STATUS.PENDENTE;
   const hasCustomerEvaluation = Boolean(ticket.customerEvaluatedAt || ticket.customer_evaluated_at);
 
   return {
@@ -199,6 +203,8 @@ const buildTicketPermissions = (ticket, context) => {
       isEmployee && normalizedStatus === TICKET_STATUS.ABERTO,
     canAssign:
       isCompanyAdmin && !isClosedTicketStatus(normalizedStatus),
+    canRedirect:
+      canAssignedEmployeeReassign,
     canResolve:
       canEmployeeAct && normalizedStatus === TICKET_STATUS.PENDENTE,
     canResolveByCustomer:
@@ -1356,10 +1362,13 @@ const updateTicketAssignment = async (authUser, ticketId, assignedUserId) => {
     const context = await getSupportContext(authUser);
     if (context.error) return context.error;
 
-    if (context.scope !== "company_admin") {
+    const isCompanyAdmin = context.scope === "company_admin";
+    const isEmployee = context.scope === "employee";
+
+    if (!isCompanyAdmin && !isEmployee) {
       return {
         status: 403,
-        message: "Somente administradores da empresa podem reatribuir tickets.",
+        message: "Somente a equipe da empresa pode atualizar o responsável do ticket.",
       };
     }
 
@@ -1367,9 +1376,36 @@ const updateTicketAssignment = async (authUser, ticketId, assignedUserId) => {
     if (ticketResponse.error) return ticketResponse.error;
 
     const ticket = toPlain(ticketResponse.ticket);
+    const currentStatus = normalizeTicketStatus(ticket.status);
 
     if (isClosedTicketStatus(ticket.status)) {
       return { status: 400, message: "Não é possível reatribuir um ticket fechado." };
+    }
+
+    if (isEmployee) {
+      if (currentStatus !== TICKET_STATUS.PENDENTE) {
+        return {
+          status: 400,
+          message: "Somente tickets aceitos podem ser redirecionados para outro funcionário.",
+        };
+      }
+
+      if (
+        !ticket.assignedUserId ||
+        Number(ticket.assignedUserId) !== Number(context.user.id)
+      ) {
+        return {
+          status: 403,
+          message: "Somente o funcionário responsável pode redirecionar este ticket.",
+        };
+      }
+
+      if (assignedUserId === null || assignedUserId === undefined || assignedUserId === "") {
+        return {
+          status: 400,
+          message: "Selecione o funcionário que deve receber o ticket.",
+        };
+      }
     }
 
     const assigneeResponse = await resolveAssignableEmployee({
@@ -1379,11 +1415,19 @@ const updateTicketAssignment = async (authUser, ticketId, assignedUserId) => {
     if (assigneeResponse.error) return assigneeResponse.error;
 
     const assignee = assigneeResponse.employee;
+
+    if (isEmployee && Number(assignee?.id || 0) === Number(context.user.id)) {
+      return {
+        status: 400,
+        message: "Selecione outro funcionário para redirecionar o ticket.",
+      };
+    }
+
     const previousAssignee = formatUserSummary(ticket.assignedEmployee);
     const nextStatus =
-      normalizeTicketStatus(ticket.status) === TICKET_STATUS.ABERTO && assignee
+      currentStatus === TICKET_STATUS.ABERTO && assignee
         ? TICKET_STATUS.PENDENTE
-        : normalizeTicketStatus(ticket.status);
+        : currentStatus;
 
     const now = new Date();
 
@@ -1400,7 +1444,9 @@ const updateTicketAssignment = async (authUser, ticketId, assignedUserId) => {
     const assignmentLog = await ticketRepository.createUpdate({
       ticketId,
       message: assignee
-        ? `Responsável alterado para ${assignee.name}`
+        ? isEmployee
+          ? `${context.user.name} redirecionou o ticket para ${assignee.name}`
+          : `Responsável alterado para ${assignee.name}`
         : "Responsável removido do ticket",
       type: TICKET_LOG_TYPE.ASSIGNMENT,
       actorUserId: context.user.id,
@@ -1411,7 +1457,7 @@ const updateTicketAssignment = async (authUser, ticketId, assignedUserId) => {
     });
 
     let statusLog = null;
-    if (nextStatus !== normalizeTicketStatus(ticket.status)) {
+    if (nextStatus !== currentStatus) {
       statusLog = await ticketRepository.createUpdate({
         ticketId,
         message: `${context.user.name} colocou o ticket em atendimento humano`,
@@ -1425,16 +1471,28 @@ const updateTicketAssignment = async (authUser, ticketId, assignedUserId) => {
     const systemMessage = await createSystemMessageForTicket({
       ticket: ticketResponse.ticket,
       content: assignee
-        ? `${context.user.name} definiu ${assignee.name} como responsável pelo ticket.`
+        ? isEmployee
+          ? `${context.user.name} redirecionou o ticket para ${assignee.name}.`
+          : `${context.user.name} definiu ${assignee.name} como responsável pelo ticket.`
         : `${context.user.name} removeu o responsável atual do ticket.`,
     });
 
-    const updatedTicketResponse = await getTicketForContext({ ticketId, context });
-    const formattedTicket = formatTicket(updatedTicketResponse.ticket, context);
+    const updatedTicket = await ticketRepository.getByIdForCompany({
+      ticketId: Number(ticketId),
+      companyId: context.companyId,
+    });
+    const ticketStillVisibleToRequester = canContextViewTicket(updatedTicket, context);
+    const formattedTicket = ticketStillVisibleToRequester
+      ? formatTicket(updatedTicket, context)
+      : null;
+    const broadcastTicket = formatTicket(
+      updatedTicket,
+      ticketStillVisibleToRequester ? context : null
+    );
 
     broadcastTicketEvent(ticketId, "ticket_updated", {
       ticketId: Number(ticketId),
-      ticket: formattedTicket,
+      ticket: broadcastTicket,
     });
     broadcastTicketEvent(ticketId, "message_created", {
       ticketId: Number(ticketId),
@@ -1448,8 +1506,8 @@ const updateTicketAssignment = async (authUser, ticketId, assignedUserId) => {
     if (statusLog) {
       broadcastTicketEvent(ticketId, "status_changed", {
         ticketId: Number(ticketId),
-        status: formattedTicket.status,
-        ticket: formattedTicket,
+        status: broadcastTicket?.status || nextStatus,
+        ticket: broadcastTicket,
       });
       broadcastTicketEvent(ticketId, "log_created", {
         ticketId: Number(ticketId),
@@ -1459,8 +1517,11 @@ const updateTicketAssignment = async (authUser, ticketId, assignedUserId) => {
 
     return {
       status: 200,
-      message: "Responsável atualizado com sucesso.",
+      message: isEmployee
+        ? "Ticket redirecionado com sucesso."
+        : "Responsável atualizado com sucesso.",
       ticket: formattedTicket,
+      ticketStillVisibleToRequester,
     };
   } catch (error) {
     console.error("Erro ao reatribuir ticket:", error);

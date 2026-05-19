@@ -1366,7 +1366,14 @@ const getMyCompanyAdmins = async (authUserId, listOptions = {}) => {
 };
 
 const getMyCompanyEmployees = async (authUserId, listOptions = {}) => {
-  const context = await getCompanyDataForAdmin(authUserId);
+  const authUser =
+    typeof authUserId === "object" && authUserId !== null ? authUserId : null;
+  const isEmployeeRequest =
+    normalizeUserTypeValue(authUser?.userType) === USER_TYPES.FUNCIONARIO;
+  const context = isEmployeeRequest
+    ? await getCompanyDataForEmployee(authUser)
+    : await getCompanyDataForAdmin(authUser?.id || authUserId);
+
   if (context.error) return context.error;
 
   const employeesResult = await getCompanyEmployees(context.company.id, listOptions);
@@ -1374,7 +1381,9 @@ const getMyCompanyEmployees = async (authUserId, listOptions = {}) => {
 
   const response = {
     status: 200,
-    company: formatCompanySnapshot(context.company, { includeAiSettings: true }),
+    company: formatCompanySnapshot(context.company, {
+      includeAiSettings: !isEmployeeRequest,
+    }),
     employees,
   };
 

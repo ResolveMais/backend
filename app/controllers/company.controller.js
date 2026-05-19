@@ -40,8 +40,8 @@ const getMyCompanyEmployees = async (req, res) => {
   try {
     const queryOptions = getRequestQueryOrUndefined(req);
     const response = queryOptions
-      ? await companyService.getMyCompanyEmployees(req.user.id, queryOptions)
-      : await companyService.getMyCompanyEmployees(req.user.id);
+      ? await companyService.getMyCompanyEmployees(req.user, queryOptions)
+      : await companyService.getMyCompanyEmployees(req.user);
     return res.status(response.status).json(response);
   } catch (error) {
     console.error("Error fetching company employees: " + error);
