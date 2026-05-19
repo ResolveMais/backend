@@ -351,14 +351,31 @@ const formatLog = (log) => {
   };
 };
 
-const formatWorkspaceSummary = (tickets) => ({
-  total: tickets.length,
-  aberto: tickets.filter((ticket) => ticket.status === TICKET_STATUS.ABERTO).length,
-  pendente: tickets.filter((ticket) => ticket.status === TICKET_STATUS.PENDENTE).length,
-  resolvido: tickets.filter((ticket) => ticket.status === TICKET_STATUS.RESOLVIDO).length,
-  fechado: tickets.filter((ticket) => ticket.status === TICKET_STATUS.FECHADO).length,
-  semResponsavel: tickets.filter((ticket) => !ticket.assignedEmployee).length,
-});
+const formatWorkspaceSummary = (tickets) => {
+  const ratings = tickets
+    .map((ticket) => Number(ticket?.evaluation?.rating || 0))
+    .filter((rating) => rating > 0);
+  const averageRating =
+    ratings.length > 0
+      ? Number(
+        (
+          ratings.reduce((accumulator, rating) => accumulator + rating, 0) /
+          ratings.length
+        ).toFixed(1)
+      )
+      : null;
+
+  return {
+    total: tickets.length,
+    aberto: tickets.filter((ticket) => ticket.status === TICKET_STATUS.ABERTO).length,
+    pendente: tickets.filter((ticket) => ticket.status === TICKET_STATUS.PENDENTE).length,
+    resolvido: tickets.filter((ticket) => ticket.status === TICKET_STATUS.RESOLVIDO).length,
+    fechado: tickets.filter((ticket) => ticket.status === TICKET_STATUS.FECHADO).length,
+    semResponsavel: tickets.filter((ticket) => !ticket.assignedEmployee).length,
+    averageRating,
+    ratingCount: ratings.length,
+  };
+};
 
 const buildMessagePreview = (content, maxLength = 120) => {
   const normalizedContent = String(content || "")

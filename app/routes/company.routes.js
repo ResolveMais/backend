@@ -8,6 +8,7 @@ router.get("/all", CompanyController.getAll);
 router.get("/:companyId/public-dashboard", CompanyController.getPublicDashboard);
 router.get("/my-company/admins", authMiddleware, CompanyController.getMyCompanyAdmins);
 router.get("/my-company/ai-insights", authMiddleware, CompanyController.getMyCompanyAiInsights);
+router.get("/my-company/employee-ai-insights", authMiddleware, CompanyController.getMyEmployeeAiInsights);
 router.get("/my-company/complaint-titles", authMiddleware, CompanyController.getMyCompanyComplaintTitles);
 router.patch("/my-company/profile", authMiddleware, CompanyController.updateMyCompanyProfile);
 router.post("/my-company/complaint-titles", authMiddleware, CompanyController.addMyCompanyComplaintTitle);

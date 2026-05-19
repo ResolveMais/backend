@@ -139,6 +139,7 @@ describe("app/services/company.service", () => {
     jest.restoreAllMocks();
     delete process.env.OPENAI_API_KEY;
     delete process.env.OPENAI_COMPANY_INSIGHTS_MODEL;
+    delete process.env.OPENAI_EMPLOYEE_INSIGHTS_MODEL;
   });
 
   test("getPublicCompanyDashboard computes public metrics, trust level and feedback highlights", async () => {
@@ -639,6 +640,144 @@ describe("app/services/company.service", () => {
           expect.objectContaining({
             title: "Oscilação nas avaliações",
             tone: "warning",
+          }),
+        ],
+      })
+    );
+  });
+
+  test("getMyEmployeeAiInsights returns structured coaching for the logged employee", async () => {
+    process.env.OPENAI_API_KEY = "test-key";
+    process.env.OPENAI_EMPLOYEE_INSIGHTS_MODEL = "gpt-4.1-nano";
+
+    const employee = asModel({
+      id: 55,
+      name: "Ana Martins",
+      email: "ana@example.com",
+      phone: "11999999999",
+      cpf: "12345678901",
+      avatarUrl: null,
+      jobTitle: "Analista",
+      userType: "funcionario",
+      companyId: 12,
+    });
+    const tickets = [
+      {
+        id: 1,
+        status: "fechado",
+        createdAt: "2026-05-12T10:00:00.000Z",
+        updatedAt: "2026-05-12T11:00:00.000Z",
+        customerRating: 2,
+        customerFeedback: "Demorou para responder",
+        customerEvaluatedAt: "2026-05-12T12:00:00.000Z",
+        resolutionSource: "human",
+        tituloReclamacao: { title: "Entrega" },
+        assignedEmployee: { id: 55, name: "Ana Martins", jobTitle: "Analista" },
+      },
+      {
+        id: 2,
+        status: "fechado",
+        createdAt: "2026-05-13T10:00:00.000Z",
+        updatedAt: "2026-05-13T12:00:00.000Z",
+        customerRating: 5,
+        customerFeedback: "Resolveu rápido e explicou bem",
+        customerEvaluatedAt: "2026-05-13T13:00:00.000Z",
+        resolutionSource: "human",
+        tituloReclamacao: { title: "Cobrança" },
+        assignedEmployee: { id: 55, name: "Ana Martins", jobTitle: "Analista" },
+      },
+      {
+        id: 3,
+        status: "fechado",
+        createdAt: "2026-05-14T10:00:00.000Z",
+        updatedAt: "2026-05-14T12:00:00.000Z",
+        customerRating: 5,
+        customerFeedback: "Outro atendente foi ótimo",
+        customerEvaluatedAt: "2026-05-14T13:00:00.000Z",
+        resolutionSource: "human",
+        tituloReclamacao: { title: "Cadastro" },
+        assignedEmployee: { id: 77, name: "Outra Pessoa", jobTitle: "Analista" },
+      },
+    ];
+    const {
+      companyService,
+      companyRepositoryMock,
+      openAiCreateMock,
+      ticketRepositoryMock,
+      userRepositoryMock,
+    } = await loadCompanyService({
+      companyRepositoryOverrides: {
+        getById: jest.fn().mockResolvedValue({
+          id: 12,
+          name: "Resolve Mais",
+          description: "Operação digital",
+          cnpj: "12345678000199",
+        }),
+      },
+      ticketRepositoryOverrides: {
+        listByCompanyId: jest.fn().mockResolvedValue(tickets),
+      },
+      userRepositoryOverrides: {
+        getById: jest.fn().mockResolvedValue(employee),
+      },
+      openAiCreateImplementation: async () => ({
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                headline: "Clientes percebem rapidez, mas querem mais previsibilidade",
+                summary:
+                  "As avaliações mostram boa capacidade de resolução, com espaço para reduzir sensação de demora em parte dos atendimentos.",
+                insights: [
+                  {
+                    title: "Rapidez e clareza aparecem como força",
+                    tone: "success",
+                    summary:
+                      "Os elogios recentes destacam resolução rápida e explicações mais claras ao cliente.",
+                    evidence: [
+                      "Há comentário positivo citando resolução rápida e boa explicação.",
+                    ],
+                    recommendedAction:
+                      "Preservar o padrão de resposta objetiva e confirmação do que foi feito no fechamento.",
+                  },
+                ],
+              }),
+            },
+          },
+        ],
+      }),
+    });
+
+    const response = await companyService.getMyEmployeeAiInsights({
+      id: 55,
+      userType: "funcionario",
+      companyId: 12,
+    });
+
+    expect(companyRepositoryMock.getById).toHaveBeenCalledWith(12);
+    expect(userRepositoryMock.getById).toHaveBeenCalledWith(55);
+    expect(ticketRepositoryMock.listByCompanyId).toHaveBeenCalledWith({
+      companyId: 12,
+    });
+    expect(openAiCreateMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        model: "gpt-4.1-nano",
+        response_format: { type: "json_object" },
+      })
+    );
+    expect(response).toEqual(
+      expect.objectContaining({
+        status: 200,
+        model: "gpt-4.1-nano",
+        headline: "Clientes percebem rapidez, mas querem mais previsibilidade",
+        sourceData: {
+          ticketsAnalyzed: 2,
+          reviewsAnalyzed: 2,
+        },
+        insights: [
+          expect.objectContaining({
+            title: "Rapidez e clareza aparecem como força",
+            tone: "success",
           }),
         ],
       })

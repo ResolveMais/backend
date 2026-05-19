@@ -364,6 +364,8 @@ describe("app/services/ticket.service", () => {
       resolvido: 0,
       fechado: 0,
       semResponsavel: 1,
+      averageRating: null,
+      ratingCount: 0,
     });
   });
 

@@ -59,6 +59,16 @@ const getMyCompanyAiInsights = async (req, res) => {
   }
 };
 
+const getMyEmployeeAiInsights = async (req, res) => {
+  try {
+    const response = await companyService.getMyEmployeeAiInsights(req.user);
+    return res.status(response.status).json(response);
+  } catch (error) {
+    console.error("Error generating employee AI insights: " + error);
+    return res.status(500).json({ status: 500, message: "Internal server error" });
+  }
+};
+
 const getMyCompanyComplaintTitles = async (req, res) => {
   try {
     const response = await companyService.getMyCompanyComplaintTitles(req.user.id);
@@ -174,6 +184,7 @@ export {
   getPublicDashboard,
   getMyCompanyAdmins,
   getMyCompanyAiInsights,
+  getMyEmployeeAiInsights,
   getMyCompanyComplaintTitles,
   getMyCompanyEmployees,
   removeMyCompanyAdmin,
@@ -189,6 +200,7 @@ export default {
   getPublicDashboard,
   getMyCompanyAdmins,
   getMyCompanyAiInsights,
+  getMyEmployeeAiInsights,
   getMyCompanyEmployees,
   getMyCompanyComplaintTitles,
   updateMyCompanyProfile,

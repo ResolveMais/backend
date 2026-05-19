@@ -16,11 +16,15 @@ const USER_TYPES = Object.freeze({
 
 const normalizeDigits = (value = "") => String(value).replace(/\D/g, "");
 const normalizeText = (value = "") => String(value).trim();
+const normalizeUserTypeValue = (value = "") => normalizeText(value).toLowerCase();
 const MAX_AI_PROFILE_FIELD_LENGTH = 4000;
 const OPENAI_COMPANY_INSIGHTS_MODEL =
   process.env.OPENAI_COMPANY_INSIGHTS_MODEL ||
   process.env.OPENAI_MODEL ||
   "gpt-4.1-mini";
+const OPENAI_EMPLOYEE_INSIGHTS_MODEL =
+  process.env.OPENAI_EMPLOYEE_INSIGHTS_MODEL ||
+  OPENAI_COMPANY_INSIGHTS_MODEL;
 const AI_INSIGHT_TONES = new Set(["success", "warning", "danger", "neutral"]);
 const PEOPLE_DEFAULT_PAGE = 1;
 const PEOPLE_DEFAULT_PAGE_SIZE = 5;
@@ -666,6 +670,177 @@ const buildCompanyAiSnapshot = ({ company, tickets, employees }) => {
   };
 };
 
+const isTicketAssignedToEmployee = (ticket, employeeId) =>
+  Number(
+    ticket?.assignedEmployee?.id ||
+      ticket?.assignedUserId ||
+      ticket?.assignedEmployeeId ||
+      ticket?.assigned_user_id ||
+      0
+  ) === Number(employeeId || 0);
+
+const buildEmployeeReviewSnapshot = (ticket) => ({
+  ticketId: ticket.id,
+  subject: ticket.tituloReclamacao?.title || "Sem assunto",
+  rating: Number(ticket.customerRating || 0),
+  comment: normalizeInlineText(ticket.customerFeedback || "", 180) || null,
+  resolutionSource: ticket.resolutionSource || null,
+  status: normalizeTicketStatus(ticket.status),
+  submittedAt: toIsoDateOrNull(
+    ticket.customerEvaluatedAt || ticket.updatedAt || ticket.createdAt
+  ),
+});
+
+const buildEmployeeSubjectSentimentSummary = (tickets = [], sortByBestRating = false) =>
+  Array.from(
+    tickets.reduce((accumulator, ticket) => {
+      const subject = ticket.tituloReclamacao?.title || "Sem assunto";
+      const currentItem = accumulator.get(subject) || {
+        subject,
+        count: 0,
+        totalRating: 0,
+        comments: [],
+      };
+
+      currentItem.count += 1;
+      currentItem.totalRating += Number(ticket.customerRating || 0);
+
+      const normalizedComment = normalizeInlineText(ticket.customerFeedback || "", 120);
+
+      if (normalizedComment) {
+        currentItem.comments.push(normalizedComment);
+      }
+
+      accumulator.set(subject, currentItem);
+      return accumulator;
+    }, new Map()).values()
+  )
+    .map((item) => ({
+      subject: item.subject,
+      count: item.count,
+      averageRating:
+        item.count > 0
+          ? Number((item.totalRating / item.count).toFixed(1))
+          : null,
+      sampleComment: item.comments[0] || null,
+    }))
+    .sort((left, right) => {
+      if (right.count !== left.count) {
+        return right.count - left.count;
+      }
+
+      if ((left.averageRating || 0) !== (right.averageRating || 0)) {
+        return sortByBestRating
+          ? (right.averageRating || 0) - (left.averageRating || 0)
+          : (left.averageRating || 0) - (right.averageRating || 0);
+      }
+
+      return String(left.subject || "").localeCompare(String(right.subject || ""));
+    })
+    .slice(0, 4);
+
+const buildEmployeeAiSnapshot = ({ company, employee, tickets }) => {
+  const resolvedTickets = tickets.filter(
+    (ticket) => normalizeTicketStatus(ticket.status) === TICKET_STATUS.RESOLVIDO
+  ).length;
+  const closedTickets = tickets.filter(
+    (ticket) => normalizeTicketStatus(ticket.status) === TICKET_STATUS.FECHADO
+  ).length;
+  const activeTickets = tickets.filter((ticket) =>
+    [TICKET_STATUS.ABERTO, TICKET_STATUS.PENDENTE, TICKET_STATUS.RESOLVIDO].includes(
+      normalizeTicketStatus(ticket.status)
+    )
+  ).length;
+  const ratedTickets = tickets.filter((ticket) => Number(ticket.customerRating || 0) > 0);
+  const totalRatings = ratedTickets.length;
+  const averageRating =
+    totalRatings > 0
+      ? Number(
+          (
+            ratedTickets.reduce(
+              (accumulator, ticket) => accumulator + Number(ticket.customerRating || 0),
+              0
+            ) / totalRatings
+          ).toFixed(1)
+        )
+      : null;
+  const ratingDistribution = {
+    1: ratedTickets.filter((ticket) => Number(ticket.customerRating) === 1).length,
+    2: ratedTickets.filter((ticket) => Number(ticket.customerRating) === 2).length,
+    3: ratedTickets.filter((ticket) => Number(ticket.customerRating) === 3).length,
+    4: ratedTickets.filter((ticket) => Number(ticket.customerRating) === 4).length,
+    5: ratedTickets.filter((ticket) => Number(ticket.customerRating) === 5).length,
+  };
+  const negativeRatedTickets = ratedTickets.filter(
+    (ticket) => Number(ticket.customerRating || 0) <= 3
+  );
+  const positiveRatedTickets = ratedTickets.filter(
+    (ticket) => Number(ticket.customerRating || 0) >= 4
+  );
+  const commentedReviews = ratedTickets.filter((ticket) =>
+    Boolean(normalizeText(ticket.customerFeedback || ""))
+  );
+
+  return {
+    company: {
+      id: company.id,
+      name: company.name,
+      description: normalizeInlineText(company.description || "", 220) || null,
+    },
+    employee: {
+      id: employee.id,
+      name: employee.name,
+      jobTitle: employee.jobTitle || null,
+    },
+    summary: {
+      assignedTickets: tickets.length,
+      activeTickets,
+      resolvedTickets,
+      closedTickets,
+      totalRatings,
+      averageRating,
+      commentedReviews: commentedReviews.length,
+      completionRate:
+        tickets.length > 0
+          ? Math.round(((resolvedTickets + closedTickets) / tickets.length) * 100)
+          : 0,
+      ratingDistribution,
+      trustLevel: getTrustLevel({ averageRating, ratingCount: totalRatings }),
+    },
+    topComplaintSubjects: buildEmployeeSubjectSentimentSummary(
+      negativeRatedTickets,
+      false
+    ),
+    topPraiseSubjects: buildEmployeeSubjectSentimentSummary(
+      positiveRatedTickets,
+      true
+    ),
+    recentReviews: ratedTickets
+      .sort((left, right) => {
+        const leftTime =
+          createDateFromValue(
+            left.customerEvaluatedAt || left.updatedAt || left.createdAt
+          )?.getTime() || 0;
+        const rightTime =
+          createDateFromValue(
+            right.customerEvaluatedAt || right.updatedAt || right.createdAt
+          )?.getTime() || 0;
+
+        return rightTime - leftTime;
+      })
+      .slice(0, 8)
+      .map(buildEmployeeReviewSnapshot),
+    recentNegativeFeedback: negativeRatedTickets
+      .sort((left, right) => Number(left.customerRating || 0) - Number(right.customerRating || 0))
+      .slice(0, 4)
+      .map(buildEmployeeReviewSnapshot),
+    recentPositiveFeedback: positiveRatedTickets
+      .sort((left, right) => Number(right.customerRating || 0) - Number(left.customerRating || 0))
+      .slice(0, 4)
+      .map(buildEmployeeReviewSnapshot),
+  };
+};
+
 const extractJsonObject = (value = "") => {
   const normalizedValue = String(value || "").trim();
 
@@ -827,6 +1002,104 @@ const generateMyCompanyAiInsights = async ({ company, tickets, employees }) => {
   }
 };
 
+const generateMyEmployeeAiInsights = async ({ company, employee, tickets }) => {
+  const apiKey = process.env.OPENAI_API_KEY;
+
+  if (!apiKey) {
+    return {
+      status: 503,
+      message: "Variável OPENAI_API_KEY não configurada para gerar a leitura do funcionário.",
+    };
+  }
+
+  const snapshot = buildEmployeeAiSnapshot({ company, employee, tickets });
+
+  if (snapshot.summary.assignedTickets === 0) {
+    return {
+      status: 200,
+      headline: "Ainda não há tickets suficientes para leitura",
+      summary:
+        "Quando você começar a receber tickets atribuídos, a IA poderá destacar elogios, reclamações e sugestões práticas com base nas avaliações dos clientes.",
+      insights: [],
+      generatedAt: new Date().toISOString(),
+      model: OPENAI_EMPLOYEE_INSIGHTS_MODEL,
+      sourceData: {
+        ticketsAnalyzed: 0,
+        reviewsAnalyzed: 0,
+      },
+    };
+  }
+
+  if (snapshot.summary.totalRatings === 0) {
+    return {
+      status: 200,
+      headline: "Ainda não há avaliações suficientes para esta leitura",
+      summary:
+        "Seus tickets já estão sendo acompanhados, mas a IA depende das notas e comentários dos clientes para apontar elogios, reclamações e oportunidades reais de melhoria.",
+      insights: [],
+      generatedAt: new Date().toISOString(),
+      model: OPENAI_EMPLOYEE_INSIGHTS_MODEL,
+      sourceData: {
+        ticketsAnalyzed: snapshot.summary.assignedTickets,
+        reviewsAnalyzed: 0,
+      },
+    };
+  }
+
+  try {
+    const openai = new OpenAI({ apiKey });
+    const completion = await openai.chat.completions.create({
+      model: OPENAI_EMPLOYEE_INSIGHTS_MODEL,
+      temperature: 0.4,
+      response_format: { type: "json_object" },
+      messages: [
+        {
+          role: "system",
+          content: [
+            "Você é um analista de qualidade de atendimento do Resolve Mais.",
+            "Sua tarefa é ler um snapshot do desempenho de um funcionário e devolver JSON puro em português do Brasil.",
+            "Baseie-se apenas nos dados recebidos.",
+            "Mostre o que os clientes mais elogiam, o que mais reclamam, sinais positivos e pontos práticos de melhoria.",
+            "Quando fizer sentido, escreva a conclusão diretamente para o funcionário em tom profissional, objetivo e útil.",
+            "Nunca invente tickets, elogios, reclamações, causas ou comportamentos que não estejam no snapshot.",
+            "Não exponha nomes técnicos de campos, chaves camelCase, labels internas ou nomes de propriedade do snapshot.",
+            "Se a base estiver pequena, reconheça a limitação sem exagerar conclusões.",
+            "Retorne exatamente este formato:",
+            '{ "headline": "string", "summary": "string", "insights": [{ "title": "string", "tone": "success|warning|danger|neutral", "summary": "string", "evidence": ["string"], "recommendedAction": "string" }] }',
+            "Gere no máximo 3 insights.",
+          ].join("\n"),
+        },
+        {
+          role: "user",
+          content: JSON.stringify(snapshot, null, 2),
+        },
+      ],
+    });
+
+    const rawContent = completion?.choices?.[0]?.message?.content || "";
+    const parsedInsights = parseCompanyAiInsights(rawContent);
+
+    return {
+      status: 200,
+      ...parsedInsights,
+      generatedAt: new Date().toISOString(),
+      model: OPENAI_EMPLOYEE_INSIGHTS_MODEL,
+      sourceData: {
+        ticketsAnalyzed: snapshot.summary.assignedTickets,
+        reviewsAnalyzed: snapshot.summary.totalRatings,
+      },
+    };
+  } catch (error) {
+    console.error("Erro ao gerar leitura do funcionário com IA:", error);
+
+    return {
+      status: 502,
+      message:
+        "Não foi possível gerar a leitura da IA para o seu atendimento agora.",
+    };
+  }
+};
+
 const getCompanyFromAdminUser = async (userId) => {
   const company = await companyRepository.getByAdminUserId(userId);
   return company || null;
@@ -951,6 +1224,48 @@ const getCompanyDataForAdmin = async (authUserId) => {
   }
 
   return { company };
+};
+
+const getCompanyDataForEmployee = async (authUser) => {
+  const normalizedUserType = normalizeUserTypeValue(authUser?.userType);
+
+  if (normalizedUserType !== USER_TYPES.FUNCIONARIO || !authUser?.companyId) {
+    return {
+      error: {
+        status: 403,
+        message: "Somente funcionários vinculados a uma empresa podem gerar essa leitura.",
+      },
+    };
+  }
+
+  const [company, employee] = await Promise.all([
+    companyRepository.getById(authUser.companyId),
+    userRepository.getById(authUser.id),
+  ]);
+
+  if (!company) {
+    return { error: { status: 404, message: "Empresa não encontrada" } };
+  }
+
+  const plainEmployee = toPlain(employee);
+
+  if (
+    !plainEmployee ||
+    normalizeUserTypeValue(plainEmployee.userType) !== USER_TYPES.FUNCIONARIO ||
+    Number(plainEmployee.companyId || 0) !== Number(company.id)
+  ) {
+    return {
+      error: {
+        status: 403,
+        message: "Funcionário não vinculado corretamente à empresa.",
+      },
+    };
+  }
+
+  return {
+    company,
+    employee: plainEmployee,
+  };
 };
 
 const getAllCompanies = async () => {
@@ -1085,6 +1400,24 @@ const getMyCompanyAiInsights = async (authUserId) => {
     company: context.company,
     tickets,
     employees,
+  });
+};
+
+const getMyEmployeeAiInsights = async (authUser) => {
+  const context = await getCompanyDataForEmployee(authUser);
+  if (context.error) return context.error;
+
+  const rawTickets = await ticketRepository.listByCompanyId({
+    companyId: context.company.id,
+  });
+  const employeeTickets = rawTickets
+    .map((ticket) => toPlain(ticket))
+    .filter((ticket) => isTicketAssignedToEmployee(ticket, context.employee.id));
+
+  return generateMyEmployeeAiInsights({
+    company: context.company,
+    employee: context.employee,
+    tickets: employeeTickets,
   });
 };
 
@@ -1601,6 +1934,7 @@ export {
   getPublicCompanyDashboard,
   getMyCompanyAdmins,
   getMyCompanyAiInsights,
+  getMyEmployeeAiInsights,
   getMyCompanyComplaintTitles,
   getMyCompanyEmployees,
   removeMyCompanyAdmin,
@@ -1616,6 +1950,7 @@ export default {
   getPublicCompanyDashboard,
   getMyCompanyAdmins,
   getMyCompanyAiInsights,
+  getMyEmployeeAiInsights,
   getMyCompanyEmployees,
   getMyCompanyComplaintTitles,
   updateMyCompanyProfile,
